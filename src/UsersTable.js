@@ -2,19 +2,34 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import { Download, Search } from "lucide-react";
 
 function UsersTable() {
 
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
-  const [expandedField, setExpandedField] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [subModalData, setSubModalData] = useState(null);
+  const [subModalTitle, setSubModalTitle] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
-  const usersPerPage = 10;
 
+  // 📱 Responsive users per page
+  const getUsersPerPage = () => {
+    if (window.innerWidth < 600) return 5;
+    if (window.innerWidth < 1024) return 8;
+    return 10;
+  };
+
+  const [usersPerPage, setUsersPerPage] = useState(getUsersPerPage());
+
+  // 🔄 Update on resize
+  useEffect(() => {
+    const handleResize = () => setUsersPerPage(getUsersPerPage());
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // 🔥 Load users
   useEffect(() => {
     axios.get("https://user-extract.onrender.com/api/all-users")
       .then(res => setUsers(res.data))
@@ -37,17 +52,15 @@ function UsersTable() {
 
   // 🔥 Fetch user details
   const handleUserClick = (user) => {
-    setLoading(true);
-
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
-      .then(res => {
-        setSelectedUser(res.data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+      .then(res => setSelectedUser(res.data))
+      .catch(err => console.error(err));
+  };
+
+  // 🔥 Sub modal open
+  const openSubModal = (title, data) => {
+    setSubModalTitle(title);
+    setSubModalData(data);
   };
 
   // ⬇ Download
@@ -65,45 +78,44 @@ function UsersTable() {
       <h1>User Dashboard</h1>
 
       <div style={styles.topBar}>
-        <div>
-          <Search size={16} />
-          <input
-            placeholder="Search..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-          />
-        </div>
-
-        <button onClick={downloadAll}>
-          <Download size={16} /> Download
+        <input
+          placeholder="Search..."
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setCurrentPage(1);
+          }}
+          style={styles.search}
+        />
+        <button onClick={downloadAll} style={styles.downloadBtn}>
+          Download
         </button>
       </div>
 
       {/* TABLE */}
-      <table style={styles.table}>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Login</th>
-            <th>Name</th>
-            <th>Email</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {currentUsers.map((user, i) => (
-            <tr key={i} onClick={() => handleUserClick(user)} style={styles.row}>
-              <td>{user.id}</td>
-              <td>{user.login}</td>
-              <td>{user.firstName} {user.lastName}</td>
-              <td>{user.email}</td>
+      <div style={styles.tableWrapper}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Login</th>
+              <th>Name</th>
+              <th>Email</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+
+          <tbody>
+            {currentUsers.map((user, i) => (
+              <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
+                <td>{user.id}</td>
+                <td>{user.login}</td>
+                <td>{user.firstName} {user.lastName}</td>
+                <td>{user.email}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {/* PAGINATION */}
       <div style={styles.pagination}>
@@ -112,83 +124,85 @@ function UsersTable() {
         <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>Next</button>
       </div>
 
-      {/* MODAL */}
+      {/* MAIN MODAL */}
       {selectedUser && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
 
             <h2>User Details</h2>
 
-            {loading ? (
-              <p>Loading...</p>
-            ) : (
-              <div style={styles.scrollBox}>
+            <div style={styles.scrollBox}>
+              <table style={styles.detailTable}>
+                <tbody>
 
-                <table style={styles.detailTable}>
-                  <tbody>
+                  {Object.entries(selectedUser).map(([key, value]) => (
 
-                    {Object.entries(selectedUser).map(([key, value]) => (
+                    <tr key={key}>
+                      <td style={styles.key}>{key}</td>
 
-                      <tr key={key}>
-                        <td style={styles.key}>{key}</td>
+                      <td>
+                        {(key === "trakeyeType" || key === "trakeyeTypeAttributeValues" || key === "geofenceNames") ? (
+                          <button
+                            style={styles.viewBtn}
+                            onClick={() => openSubModal(key, value)}
+                          >
+                            View
+                          </button>
+                        ) : typeof value === "object" ? (
+                          JSON.stringify(value)
+                        ) : (
+                          value?.toString()
+                        )}
+                      </td>
+                    </tr>
 
-                        <td>
-                          {key === "geofenceNames" ? (
-                            <>
-                              <button
-                                onClick={() =>
-                                  setExpandedField(expandedField === key ? null : key)
-                                }
-                              >
-                                {expandedField === key ? "Hide" : "View"}
-                              </button>
+                  ))}
 
-                              {expandedField === key && (
-                                <div style={styles.geoBox}>
-                                  <table style={styles.innerTable}>
-                                    <thead>
-                                      <tr>
-                                        <th>#</th>
-                                        <th>Geofence</th>
-                                      </tr>
-                                    </thead>
-
-                                    <tbody>
-                                      {value?.length > 0 ? (
-                                        value.map((g, i) => (
-                                          <tr key={i}>
-                                            <td>{i + 1}</td>
-                                            <td>{g}</td>
-                                          </tr>
-                                        ))
-                                      ) : (
-                                        <tr>
-                                          <td colSpan="2">No Geofences</td>
-                                        </tr>
-                                      )}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              )}
-                            </>
-                          ) : typeof value === "object" ? (
-                            JSON.stringify(value)
-                          ) : (
-                            value?.toString()
-                          )}
-                        </td>
-
-                      </tr>
-
-                    ))}
-
-                  </tbody>
-                </table>
-
-              </div>
-            )}
+                </tbody>
+              </table>
+            </div>
 
             <button onClick={() => setSelectedUser(null)}>Close</button>
+
+          </div>
+        </div>
+      )}
+
+      {/* SUB MODAL */}
+      {subModalData && (
+        <div style={styles.overlay}>
+          <div style={styles.subModal}>
+
+            <h3>{subModalTitle}</h3>
+
+            <div style={styles.scrollBox}>
+
+              {subModalTitle === "geofenceNames" && Array.isArray(subModalData) ? (
+                <table style={styles.innerTable}>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Geofence Name</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subModalData.map((g, i) => (
+                      <tr key={i}>
+                        <td>{i + 1}</td>
+                        <td>{g}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <pre style={styles.jsonBox}>
+                  {JSON.stringify(subModalData, null, 2)}
+                </pre>
+              )}
+
+            </div>
+
+            <button onClick={() => setSubModalData(null)}>Close</button>
 
           </div>
         </div>
@@ -200,17 +214,38 @@ function UsersTable() {
 
 // 🎨 STYLES
 const styles = {
-  page: { padding: "20px" },
+  page: { padding: "20px", fontFamily: "Arial" },
 
   topBar: {
     display: "flex",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: "10px",
     marginBottom: "10px"
+  },
+
+  search: {
+    padding: "8px",
+    flex: "1",
+    minWidth: "200px"
+  },
+
+  downloadBtn: {
+    background: "#3b82f6",
+    color: "white",
+    padding: "8px 12px",
+    border: "none",
+    borderRadius: "6px"
+  },
+
+  tableWrapper: {
+    overflowX: "auto"
   },
 
   table: {
     width: "100%",
-    borderCollapse: "collapse"
+    borderCollapse: "collapse",
+    minWidth: "600px"
   },
 
   row: {
@@ -235,8 +270,18 @@ const styles = {
   modal: {
     background: "white",
     padding: "20px",
-    width: "600px",
-    maxHeight: "80vh"
+    width: "90%",
+    maxWidth: "700px",
+    maxHeight: "80vh",
+    borderRadius: "10px"
+  },
+
+  subModal: {
+    background: "white",
+    padding: "20px",
+    width: "90%",
+    maxWidth: "500px",
+    borderRadius: "10px"
   },
 
   scrollBox: {
@@ -251,16 +296,26 @@ const styles = {
 
   key: {
     fontWeight: "bold",
-    width: "30%"
+    width: "40%"
   },
 
-  geoBox: {
-    marginTop: "10px"
+  viewBtn: {
+    background: "#6366f1",
+    color: "white",
+    padding: "5px 10px",
+    borderRadius: "6px",
+    border: "none"
   },
 
   innerTable: {
     width: "100%",
     borderCollapse: "collapse"
+  },
+
+  jsonBox: {
+    background: "#f1f5f9",
+    padding: "10px",
+    borderRadius: "6px"
   }
 };
 
