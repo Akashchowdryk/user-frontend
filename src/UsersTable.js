@@ -1,15 +1,19 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 function UsersTable() {
 
   const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
+  // ✅ LOAD USERS FAST
   useEffect(() => {
     axios.get("https://user-extract.onrender.com/api/all-users")
       .then(res => setUsers(res.data))
@@ -25,30 +29,53 @@ function UsersTable() {
     );
   });
 
-  // 📄 PAGINATION LOGIC
+  // 📄 PAGINATION
   const indexOfLastUser = currentPage * usersPerPage;
-  const indexOfFirstUser = indexOfLastUser - usersPerPage;
-  const currentUsers = filteredUsers.slice(indexOfFirstUser, indexOfLastUser);
-
+  const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+
+  // 🔥 CLICK USER → LOAD GEOFENCE
+  const handleUserClick = (user) => {
+
+    setLoading(true);
+
+    axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
+      .then(res => {
+        setSelectedUser(res.data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+  };
+
+  // ⬇ DOWNLOAD
+  const downloadAll = () => {
+    const ws = XLSX.utils.json_to_sheet(users);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Users");
+    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    saveAs(new Blob([buffer]), "users.xlsx");
+  };
 
   return (
     <div style={styles.container}>
 
       <h1>User Dashboard</h1>
 
-      {/* SEARCH */}
-      <input
-        placeholder="Search by login or ID"
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          setCurrentPage(1);
-        }}
-        style={styles.search}
-      />
+      <div style={styles.topBar}>
+        <input
+          placeholder="Search..."
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setCurrentPage(1);
+          }}
+        />
+        <button onClick={downloadAll}>Download</button>
+      </div>
 
-      {/* TABLE */}
       <table style={styles.table}>
         <thead>
           <tr>
@@ -56,23 +83,16 @@ function UsersTable() {
             <th>Login</th>
             <th>Name</th>
             <th>Email</th>
-            <th>Roles</th>
           </tr>
         </thead>
 
         <tbody>
           {currentUsers.map((user, i) => (
-            <tr key={i} style={styles.row} onClick={() => setSelectedUser(user)}>
+            <tr key={i} onClick={() => handleUserClick(user)} style={styles.row}>
               <td>{user.id}</td>
               <td>{user.login}</td>
               <td>{user.firstName} {user.lastName}</td>
               <td>{user.email}</td>
-
-              <td>
-                {user.authorities?.map((r, idx) => (
-                  <div key={idx}>{r}</div>
-                ))}
-              </td>
             </tr>
           ))}
         </tbody>
@@ -80,51 +100,36 @@ function UsersTable() {
 
       {/* PAGINATION */}
       <div style={styles.pagination}>
-        <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}>
-          Prev
-        </button>
-
-        <span> Page {currentPage} / {totalPages} </span>
-
-        <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>
-          Next
-        </button>
+        <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}>Prev</button>
+        <span>{currentPage} / {totalPages}</span>
+        <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>Next</button>
       </div>
 
-      {/* USER DETAILS MODAL */}
+      {/* MODAL */}
       {selectedUser && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
 
-            <div style={styles.modalHeader}>
-              <h2>User Details</h2>
-              <button onClick={() => setSelectedUser(null)}>Close</button>
-            </div>
+            <h2>User Details</h2>
 
-            <div style={styles.modalBody}>
+            {loading ? (
+              <p>Loading...</p>
+            ) : (
+              <>
+                <p><strong>Login:</strong> {selectedUser.login}</p>
 
-              <p><strong>ID:</strong> {selectedUser.id}</p>
-              <p><strong>Login:</strong> {selectedUser.login}</p>
-              <p><strong>Name:</strong> {selectedUser.firstName} {selectedUser.lastName}</p>
-              <p><strong>Email:</strong> {selectedUser.email}</p>
+                <p><strong>Geofences:</strong></p>
+                {selectedUser.geofenceNames?.length > 0 ? (
+                  selectedUser.geofenceNames.map((g, i) => (
+                    <div key={i} style={styles.geo}>{g}</div>
+                  ))
+                ) : (
+                  <p>No Geofence</p>
+                )}
+              </>
+            )}
 
-              <p><strong>Roles:</strong></p>
-              {selectedUser.authorities?.map((r, i) => (
-                <div key={i}>{r}</div>
-              ))}
-
-              {/* 🔥 GEOFENCE HERE ONLY */}
-              <p><strong>Geofences:</strong></p>
-
-              {selectedUser.geofenceNames?.length > 0 ? (
-                selectedUser.geofenceNames.map((geo, i) => (
-                  <div key={i} style={styles.geo}>{geo}</div>
-                ))
-              ) : (
-                <p>No Geofences</p>
-              )}
-
-            </div>
+            <button onClick={() => setSelectedUser(null)}>Close</button>
 
           </div>
         </div>
@@ -135,31 +140,11 @@ function UsersTable() {
 }
 
 const styles = {
-  container: { padding: "20px", fontFamily: "Arial" },
-
-  search: {
-    marginBottom: "10px",
-    padding: "8px",
-    width: "250px"
-  },
-
-  table: {
-    width: "100%",
-    borderCollapse: "collapse"
-  },
-
-  row: {
-    borderBottom: "1px solid #ccc",
-    cursor: "pointer"
-  },
-
-  pagination: {
-    marginTop: "10px",
-    display: "flex",
-    justifyContent: "center",
-    gap: "10px"
-  },
-
+  container: { padding: "20px" },
+  table: { width: "100%" },
+  row: { cursor: "pointer" },
+  topBar: { marginBottom: "10px" },
+  pagination: { marginTop: "10px" },
   overlay: {
     position: "fixed",
     inset: 0,
@@ -168,28 +153,15 @@ const styles = {
     justifyContent: "center",
     alignItems: "center"
   },
-
   modal: {
     background: "white",
     padding: "20px",
-    width: "400px",
-    borderRadius: "10px"
+    width: "300px"
   },
-
-  modalHeader: {
-    display: "flex",
-    justifyContent: "space-between"
-  },
-
-  modalBody: {
-    marginTop: "10px"
-  },
-
   geo: {
     background: "#e0f2fe",
     padding: "5px",
-    marginBottom: "5px",
-    borderRadius: "5px"
+    margin: "3px"
   }
 };
 
