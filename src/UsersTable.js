@@ -8,24 +8,11 @@ function UsersTable() {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
+  const [showGeofence, setShowGeofence] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
+  const usersPerPage = 10;
 
-  const getUsersPerPage = () => {
-    if (window.innerWidth < 600) return 5;
-    if (window.innerWidth < 1024) return 8;
-    return 10;
-  };
-
-  const [usersPerPage, setUsersPerPage] = useState(getUsersPerPage());
-
-  useEffect(() => {
-    const handleResize = () => setUsersPerPage(getUsersPerPage());
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  // 🔥 Load users
   useEffect(() => {
     axios.get("https://user-extract.onrender.com/api/all-users")
       .then(res => setUsers(res.data))
@@ -46,7 +33,7 @@ function UsersTable() {
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // 🔥 Fetch user details
+  // 🔥 Click user
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data))
@@ -61,22 +48,6 @@ function UsersTable() {
     const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     saveAs(new Blob([buffer]), "users.xlsx");
   };
-
-  // ⬇ Download Single User
-  const downloadSingleUser = () => {
-    const ws = XLSX.utils.json_to_sheet([selectedUser]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "User");
-    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([buffer]), `user_${selectedUser.id}.xlsx`);
-  };
-
-  // ❌ Fields to hide
-  const hiddenFields = [
-    "langKey","geofences","groups","vendors","userMobileApps",
-    "imei","gpsimei","deviceIdentifier","operatingSystem",
-    "resetKey","userImage","trakeyeType","trakeyeTypeAttributeValues","vendor"
-  ];
 
   return (
     <div style={styles.page}>
@@ -93,35 +64,34 @@ function UsersTable() {
           }}
           style={styles.search}
         />
+
         <button onClick={downloadAll} style={styles.downloadBtn}>
           Download All
         </button>
       </div>
 
-      {/* TABLE */}
-      <div style={styles.tableWrapper}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Login</th>
-              <th>Name</th>
-              <th>Email</th>
-            </tr>
-          </thead>
+      {/* ✅ TABLE FIXED */}
+      <table style={styles.table}>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Login</th>
+            <th>Name</th>
+            <th>Email</th>
+          </tr>
+        </thead>
 
-          <tbody>
-            {currentUsers.map((user, i) => (
-              <tr key={i} onClick={() => handleUserClick(user)} style={styles.row}>
-                <td>{user.id}</td>
-                <td>{user.login}</td>
-                <td>{user.firstName} {user.lastName}</td>
-                <td>{user.email}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        <tbody>
+          {currentUsers.map((user, i) => (
+            <tr key={i} onClick={() => handleUserClick(user)} style={styles.row}>
+              <td>{user.id}</td>
+              <td>{user.login}</td>
+              <td>{user.firstName} {user.lastName}</td>
+              <td>{user.email}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       {/* PAGINATION */}
       <div style={styles.pagination}>
@@ -130,67 +100,88 @@ function UsersTable() {
         <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>Next</button>
       </div>
 
-      {/* MODAL */}
+      {/* MAIN MODAL */}
       {selectedUser && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
 
             <h2>User Details</h2>
 
-            <div style={styles.scrollBox}>
-              <table style={styles.detailTable}>
-                <tbody>
+            <table style={styles.detailTable}>
+              <tbody>
 
-                  {Object.entries(selectedUser).map(([key, value]) => {
+                {Object.entries(selectedUser).map(([key, value]) => {
 
-                    if (hiddenFields.includes(key)) return null;
+                  // ❌ REMOVE FIELDS
+                  if ([
+                    "ownedBy","langKey","geofences","groups","vendors",
+                    "userMobileApps","imei","gpsimei","deviceIdentifier",
+                    "operatingSystem","resetKey","userImage",
+                    "trakeyeType","trakeyeTypeAttributeValues","vendor"
+                  ].includes(key)) return null;
 
-                    return (
-                      <tr key={key}>
-                        <td style={styles.key}>{key}</td>
+                  return (
+                    <tr key={key}>
+                      <td style={styles.key}>{key}</td>
 
-                        <td>
+                      <td>
 
-                          {/* ✅ AUTHORITIES */}
-                          {key === "authorities" ? (
-                            value.map((role, i) => (
-                              <div key={i} style={styles.tag}>{role}</div>
-                            ))
-                          )
+                        {/* ✅ AUTHORITIES */}
+                        {key === "authorities" ? (
+                          value.map((role, i) => (
+                            <div key={i} style={styles.tag}>{role}</div>
+                          ))
+                        )
 
-                          /* ✅ GEOFENCE */
-                          : key === "geofenceNames" ? (
-                            value?.length > 0 ? (
-                              value.map((geo, i) => (
-                                <div key={i} style={styles.geo}>{geo}</div>
-                              ))
-                            ) : "No Geofence"
-                          )
+                        /* ✅ GEOFENCE BUTTON */
+                        : key === "geofenceNames" ? (
+                          <>
+                            <button
+                              style={styles.viewBtn}
+                              onClick={() => setShowGeofence(true)}
+                            >
+                              View
+                            </button>
 
-                          : typeof value === "object"
-                          ? JSON.stringify(value)
-                          : value?.toString()
-                          }
+                            {/* SUB MODAL */}
+                            {showGeofence && (
+                              <div style={styles.overlay}>
+                                <div style={styles.subModal}>
+                                  <h3>Geofences</h3>
 
-                        </td>
-                      </tr>
-                    );
+                                  <div style={styles.scrollBox}>
+                                    {value?.length > 0 ? (
+                                      value.map((g, i) => (
+                                        <div key={i} style={styles.geo}>{g}</div>
+                                      ))
+                                    ) : (
+                                      <p>No Geofence</p>
+                                    )}
+                                  </div>
 
-                  })}
+                                  <button onClick={() => setShowGeofence(false)}>
+                                    Close
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )
 
-                </tbody>
-              </table>
-            </div>
+                        : typeof value === "object"
+                        ? JSON.stringify(value)
+                        : value?.toString()
+                        }
 
-            <div style={styles.modalActions}>
-              <button onClick={downloadSingleUser} style={styles.downloadBtn}>
-                Download User
-              </button>
+                      </td>
+                    </tr>
+                  );
+                })}
 
-              <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
-                Close
-              </button>
-            </div>
+              </tbody>
+            </table>
+
+            <button onClick={() => setSelectedUser(null)}>Close</button>
 
           </div>
         </div>
@@ -200,20 +191,23 @@ function UsersTable() {
   );
 }
 
-// 🎨 STYLES
+// 🎨 STYLES (FIXED WIDTH + ALIGNMENT)
 const styles = {
-  page: { padding: "20px", fontFamily: "Arial" },
+  page: {
+    padding: "20px",
+    maxWidth: "1200px",
+    margin: "auto"
+  },
 
   topBar: {
     display: "flex",
     justifyContent: "space-between",
-    marginBottom: "10px",
-    flexWrap: "wrap"
+    marginBottom: "10px"
   },
 
   search: {
     padding: "8px",
-    minWidth: "200px"
+    width: "250px"
   },
 
   downloadBtn: {
@@ -224,12 +218,10 @@ const styles = {
     borderRadius: "6px"
   },
 
-  tableWrapper: { overflowX: "auto" },
-
   table: {
     width: "100%",
     borderCollapse: "collapse",
-    minWidth: "600px"
+    tableLayout: "fixed"
   },
 
   row: {
@@ -254,14 +246,19 @@ const styles = {
   modal: {
     background: "white",
     padding: "20px",
-    width: "90%",
-    maxWidth: "700px",
-    maxHeight: "80vh",
+    width: "600px",
+    borderRadius: "10px"
+  },
+
+  subModal: {
+    background: "white",
+    padding: "20px",
+    width: "400px",
     borderRadius: "10px"
   },
 
   scrollBox: {
-    maxHeight: "400px",
+    maxHeight: "300px",
     overflowY: "auto"
   },
 
@@ -289,18 +286,12 @@ const styles = {
     borderRadius: "6px"
   },
 
-  modalActions: {
-    display: "flex",
-    justifyContent: "space-between",
-    marginTop: "10px"
-  },
-
-  closeBtn: {
-    background: "#ef4444",
+  viewBtn: {
+    background: "#6366f1",
     color: "white",
-    padding: "8px",
-    border: "none",
-    borderRadius: "6px"
+    padding: "5px 10px",
+    borderRadius: "6px",
+    border: "none"
   }
 };
 
