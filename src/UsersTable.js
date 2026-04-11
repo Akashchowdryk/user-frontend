@@ -8,12 +8,9 @@ function UsersTable() {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
-  const [subModalData, setSubModalData] = useState(null);
-  const [subModalTitle, setSubModalTitle] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
 
-  // 📱 Responsive users per page
   const getUsersPerPage = () => {
     if (window.innerWidth < 600) return 5;
     if (window.innerWidth < 1024) return 8;
@@ -22,7 +19,6 @@ function UsersTable() {
 
   const [usersPerPage, setUsersPerPage] = useState(getUsersPerPage());
 
-  // 🔄 Update on resize
   useEffect(() => {
     const handleResize = () => setUsersPerPage(getUsersPerPage());
     window.addEventListener("resize", handleResize);
@@ -57,13 +53,7 @@ function UsersTable() {
       .catch(err => console.error(err));
   };
 
-  // 🔥 Sub modal open
-  const openSubModal = (title, data) => {
-    setSubModalTitle(title);
-    setSubModalData(data);
-  };
-
-  // ⬇ Download
+  // ⬇ Download All
   const downloadAll = () => {
     const ws = XLSX.utils.json_to_sheet(users);
     const wb = XLSX.utils.book_new();
@@ -71,6 +61,22 @@ function UsersTable() {
     const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     saveAs(new Blob([buffer]), "users.xlsx");
   };
+
+  // ⬇ Download Single User
+  const downloadSingleUser = () => {
+    const ws = XLSX.utils.json_to_sheet([selectedUser]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "User");
+    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    saveAs(new Blob([buffer]), `user_${selectedUser.id}.xlsx`);
+  };
+
+  // ❌ Fields to hide
+  const hiddenFields = [
+    "langKey","geofences","groups","vendors","userMobileApps",
+    "imei","gpsimei","deviceIdentifier","operatingSystem",
+    "resetKey","userImage","trakeyeType","trakeyeTypeAttributeValues","vendor"
+  ];
 
   return (
     <div style={styles.page}>
@@ -88,7 +94,7 @@ function UsersTable() {
           style={styles.search}
         />
         <button onClick={downloadAll} style={styles.downloadBtn}>
-          Download
+          Download All
         </button>
       </div>
 
@@ -106,7 +112,7 @@ function UsersTable() {
 
           <tbody>
             {currentUsers.map((user, i) => (
-              <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
+              <tr key={i} onClick={() => handleUserClick(user)} style={styles.row}>
                 <td>{user.id}</td>
                 <td>{user.login}</td>
                 <td>{user.firstName} {user.lastName}</td>
@@ -124,7 +130,7 @@ function UsersTable() {
         <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>Next</button>
       </div>
 
-      {/* MAIN MODAL */}
+      {/* MODAL */}
       {selectedUser && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
@@ -135,74 +141,56 @@ function UsersTable() {
               <table style={styles.detailTable}>
                 <tbody>
 
-                  {Object.entries(selectedUser).map(([key, value]) => (
+                  {Object.entries(selectedUser).map(([key, value]) => {
 
-                    <tr key={key}>
-                      <td style={styles.key}>{key}</td>
+                    if (hiddenFields.includes(key)) return null;
 
-                      <td>
-                        {(key === "trakeyeType" || key === "trakeyeTypeAttributeValues" || key === "geofenceNames") ? (
-                          <button
-                            style={styles.viewBtn}
-                            onClick={() => openSubModal(key, value)}
-                          >
-                            View
-                          </button>
-                        ) : typeof value === "object" ? (
-                          JSON.stringify(value)
-                        ) : (
-                          value?.toString()
-                        )}
-                      </td>
-                    </tr>
+                    return (
+                      <tr key={key}>
+                        <td style={styles.key}>{key}</td>
 
-                  ))}
+                        <td>
+
+                          {/* ✅ AUTHORITIES */}
+                          {key === "authorities" ? (
+                            value.map((role, i) => (
+                              <div key={i} style={styles.tag}>{role}</div>
+                            ))
+                          )
+
+                          /* ✅ GEOFENCE */
+                          : key === "geofenceNames" ? (
+                            value?.length > 0 ? (
+                              value.map((geo, i) => (
+                                <div key={i} style={styles.geo}>{geo}</div>
+                              ))
+                            ) : "No Geofence"
+                          )
+
+                          : typeof value === "object"
+                          ? JSON.stringify(value)
+                          : value?.toString()
+                          }
+
+                        </td>
+                      </tr>
+                    );
+
+                  })}
 
                 </tbody>
               </table>
             </div>
 
-            <button onClick={() => setSelectedUser(null)}>Close</button>
+            <div style={styles.modalActions}>
+              <button onClick={downloadSingleUser} style={styles.downloadBtn}>
+                Download User
+              </button>
 
-          </div>
-        </div>
-      )}
-
-      {/* SUB MODAL */}
-      {subModalData && (
-        <div style={styles.overlay}>
-          <div style={styles.subModal}>
-
-            <h3>{subModalTitle}</h3>
-
-            <div style={styles.scrollBox}>
-
-              {subModalTitle === "geofenceNames" && Array.isArray(subModalData) ? (
-                <table style={styles.innerTable}>
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Geofence Name</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {subModalData.map((g, i) => (
-                      <tr key={i}>
-                        <td>{i + 1}</td>
-                        <td>{g}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <pre style={styles.jsonBox}>
-                  {JSON.stringify(subModalData, null, 2)}
-                </pre>
-              )}
-
+              <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
+                Close
+              </button>
             </div>
-
-            <button onClick={() => setSubModalData(null)}>Close</button>
 
           </div>
         </div>
@@ -219,14 +207,12 @@ const styles = {
   topBar: {
     display: "flex",
     justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: "10px",
-    marginBottom: "10px"
+    marginBottom: "10px",
+    flexWrap: "wrap"
   },
 
   search: {
     padding: "8px",
-    flex: "1",
     minWidth: "200px"
   },
 
@@ -238,9 +224,7 @@ const styles = {
     borderRadius: "6px"
   },
 
-  tableWrapper: {
-    overflowX: "auto"
-  },
+  tableWrapper: { overflowX: "auto" },
 
   table: {
     width: "100%",
@@ -249,8 +233,8 @@ const styles = {
   },
 
   row: {
-    cursor: "pointer",
-    borderBottom: "1px solid #ddd"
+    borderBottom: "1px solid #ddd",
+    cursor: "pointer"
   },
 
   pagination: {
@@ -276,14 +260,6 @@ const styles = {
     borderRadius: "10px"
   },
 
-  subModal: {
-    background: "white",
-    padding: "20px",
-    width: "90%",
-    maxWidth: "500px",
-    borderRadius: "10px"
-  },
-
   scrollBox: {
     maxHeight: "400px",
     overflowY: "auto"
@@ -299,22 +275,31 @@ const styles = {
     width: "40%"
   },
 
-  viewBtn: {
-    background: "#6366f1",
+  tag: {
+    background: "#eef2ff",
+    marginBottom: "5px",
+    padding: "5px",
+    borderRadius: "6px"
+  },
+
+  geo: {
+    background: "#e0f2fe",
+    marginBottom: "5px",
+    padding: "5px",
+    borderRadius: "6px"
+  },
+
+  modalActions: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: "10px"
+  },
+
+  closeBtn: {
+    background: "#ef4444",
     color: "white",
-    padding: "5px 10px",
-    borderRadius: "6px",
-    border: "none"
-  },
-
-  innerTable: {
-    width: "100%",
-    borderCollapse: "collapse"
-  },
-
-  jsonBox: {
-    background: "#f1f5f9",
-    padding: "10px",
+    padding: "8px",
+    border: "none",
     borderRadius: "6px"
   }
 };
