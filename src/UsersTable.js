@@ -10,17 +10,19 @@ function UsersTable() {
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [expandedField, setExpandedField] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
+  // ✅ LOAD USERS FAST
   useEffect(() => {
     axios.get("https://user-extract.onrender.com/api/all-users")
       .then(res => setUsers(res.data))
       .catch(err => console.error(err));
   }, []);
 
-  // 🔍 Search
+  // 🔍 SEARCH
   const filteredUsers = users.filter(user => {
     const text = search.toLowerCase();
     return (
@@ -32,12 +34,28 @@ function UsersTable() {
     );
   });
 
-  // 📄 Pagination
+  // 📄 PAGINATION
   const indexOfLastUser = currentPage * usersPerPage;
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // ⬇ Download All
+  // 🔥 CLICK USER → FETCH GEOFENCE
+  const handleUserClick = (user) => {
+
+    setLoading(true);
+
+    axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
+      .then(res => {
+        setSelectedUser(res.data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+  };
+
+  // ⬇ DOWNLOAD ALL
   const downloadAllUsers = () => {
     const ws = XLSX.utils.json_to_sheet(users);
     const wb = XLSX.utils.book_new();
@@ -46,7 +64,7 @@ function UsersTable() {
     saveAs(new Blob([buffer]), "all_users.xlsx");
   };
 
-  // ⬇ Download Single
+  // ⬇ DOWNLOAD SINGLE
   const downloadSingleUser = () => {
     const ws = XLSX.utils.json_to_sheet([selectedUser]);
     const wb = XLSX.utils.book_new();
@@ -62,20 +80,19 @@ function UsersTable() {
       <div style={styles.header}>
         <div style={styles.brand}>
           <img src={process.env.PUBLIC_URL + "/logo.png"} alt="logo" style={styles.logo} />
-          <h1 style={styles.title}>User Dashboard</h1>
+          <h1>User Dashboard</h1>
         </div>
 
         <div style={styles.actions}>
           <div style={styles.searchBox}>
             <Search size={16} />
             <input
-              placeholder="Search users..."
+              placeholder="Search..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
                 setCurrentPage(1);
               }}
-              style={styles.search}
             />
           </div>
 
@@ -99,25 +116,20 @@ function UsersTable() {
 
           <tbody>
             {currentUsers.map((user, i) => (
-              <tr key={i} style={styles.row} onClick={() => setSelectedUser(user)}>
+              <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
                 <td>{user.id}</td>
 
                 <td>
-                  <div>
-                    <div style={styles.name}>
-                      {user.firstName || user.lastName
-                        ? `${user.firstName || ""} ${user.lastName || ""}`
-                        : "N/A"}
-                    </div>
-                    <div style={styles.login}>{user.login}</div>
-                  </div>
+                  {user.firstName} {user.lastName}
+                  <br />
+                  <small>{user.login}</small>
                 </td>
 
-                <td>{user.email || "N/A"}</td>
+                <td>{user.email}</td>
 
                 <td>
-                  {user.authorities?.map((role, idx) => (
-                    <div key={idx} style={styles.role}>{role}</div>
+                  {user.authorities?.map((r, idx) => (
+                    <div key={idx}>{r}</div>
                   ))}
                 </td>
               </tr>
@@ -142,95 +154,58 @@ function UsersTable() {
               <h3>User Details</h3>
 
               <div>
-                <button onClick={downloadSingleUser} style={styles.secondaryBtn}>
-                  <Download size={14} /> Download
-                </button>
-
-                <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
-                  <X size={14} />
-                </button>
+                <button onClick={downloadSingleUser}>Download</button>
+                <button onClick={() => setSelectedUser(null)}>Close</button>
               </div>
             </div>
 
             <div style={styles.modalBody}>
-              {Object.entries(selectedUser).map(([key, value]) => {
 
-                const isObject = typeof value === "object";
+              {loading ? (
+                <p>Loading geofences...</p>
+              ) : (
+                <>
+                  <p><strong>Login:</strong> {selectedUser.login}</p>
 
-                return (
-                  <div key={key} style={styles.detailRow}>
+                  {/* ✅ GEOFENCE TABLE */}
+                  <strong>Geofences:</strong>
 
-                    <strong>{key}</strong>
+                  <button
+                    onClick={() =>
+                      setExpandedField(expandedField === "geo" ? null : "geo")
+                    }
+                  >
+                    {expandedField === "geo" ? "Hide" : "View"}
+                  </button>
 
-                    <div style={styles.value}>
+                  {expandedField === "geo" && (
+                    <table style={styles.innerTable}>
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Geofence Name</th>
+                        </tr>
+                      </thead>
 
-                      {/* ✅ GEOFENCE TABLE */}
-                      {key === "geofenceNames" ? (
-                        <>
-                          <button
-                            onClick={() =>
-                              setExpandedField(expandedField === key ? null : key)
-                            }
-                            style={styles.expandBtn}
-                          >
-                            {expandedField === key ? "Hide" : "View"}
-                          </button>
+                      <tbody>
+                        {selectedUser.geofenceNames?.length > 0 ? (
+                          selectedUser.geofenceNames.map((g, i) => (
+                            <tr key={i}>
+                              <td>{i + 1}</td>
+                              <td>{g}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="2">No Geofences</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  )}
+                </>
+              )}
 
-                          {expandedField === key && (
-                            <div style={styles.tableBox}>
-                              <table style={styles.innerTable}>
-                                <thead>
-                                  <tr>
-                                    <th>#</th>
-                                    <th>Geofence Name</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {value && value.length > 0 ? (
-                                    value.map((geo, idx) => (
-                                      <tr key={idx}>
-                                        <td>{idx + 1}</td>
-                                        <td>{geo}</td>
-                                      </tr>
-                                    ))
-                                  ) : (
-                                    <tr>
-                                      <td colSpan="2">No Geofences</td>
-                                    </tr>
-                                  )}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </>
-                      ) : (key === "ownedBy" || key === "trakeyeType") && isObject ? (
-                        <>
-                          <button
-                            onClick={() =>
-                              setExpandedField(expandedField === key ? null : key)
-                            }
-                            style={styles.expandBtn}
-                          >
-                            {expandedField === key ? "Hide" : "View"}
-                          </button>
-
-                          {expandedField === key && (
-                            <pre style={styles.jsonBox}>
-                              {JSON.stringify(value, null, 2)}
-                            </pre>
-                          )}
-                        </>
-                      ) : isObject ? (
-                        JSON.stringify(value)
-                      ) : (
-                        value?.toString()
-                      )}
-
-                    </div>
-
-                  </div>
-                );
-              })}
             </div>
 
           </div>
@@ -243,76 +218,17 @@ function UsersTable() {
 
 // 🎨 STYLES
 const styles = {
-  page: {
-    background: "#f8fafc",
-    minHeight: "100vh",
-    padding: "30px",
-    fontFamily: "Inter"
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: "20px"
-  },
-  brand: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px"
-  },
-  logo: {
-    height: "40px"
-  },
-  title: {
-    fontSize: "24px"
-  },
-  actions: {
-    display: "flex",
-    gap: "10px"
-  },
-  searchBox: {
-    display: "flex",
-    alignItems: "center",
-    gap: "5px",
-    border: "1px solid #ddd",
-    padding: "8px",
-    borderRadius: "10px"
-  },
-  search: {
-    border: "none",
-    outline: "none"
-  },
-  primaryBtn: {
-    background: "#3b82f6",
-    color: "white",
-    border: "none",
-    padding: "10px",
-    borderRadius: "10px",
-    display: "flex",
-    gap: "5px",
-    alignItems: "center"
-  },
-  card: {
-    background: "white",
-    borderRadius: "16px",
-    padding: "20px"
-  },
-  table: {
-    width: "100%"
-  },
-  row: {
-    borderBottom: "1px solid #eee",
-    cursor: "pointer"
-  },
-  role: {
-    background: "#eef2ff",
-    marginBottom: "4px",
-    padding: "4px",
-    borderRadius: "6px"
-  },
-  pagination: {
-    marginTop: "15px",
-    textAlign: "center"
-  },
+  page: { padding: "20px" },
+  header: { display: "flex", justifyContent: "space-between" },
+  brand: { display: "flex", gap: "10px", alignItems: "center" },
+  logo: { height: "40px" },
+  actions: { display: "flex", gap: "10px" },
+  searchBox: { display: "flex", gap: "5px" },
+  primaryBtn: { background: "blue", color: "white" },
+  card: { background: "white", marginTop: "20px" },
+  table: { width: "100%" },
+  row: { cursor: "pointer" },
+  pagination: { marginTop: "10px", textAlign: "center" },
   overlay: {
     position: "fixed",
     inset: 0,
@@ -321,67 +237,9 @@ const styles = {
     justifyContent: "center",
     alignItems: "center"
   },
-  modal: {
-    background: "white",
-    padding: "20px",
-    width: "600px",
-    maxHeight: "80vh",
-    overflowY: "auto"
-  },
-  modalHeader: {
-    display: "flex",
-    justifyContent: "space-between"
-  },
-  modalBody: {
-    marginTop: "10px"
-  },
-  detailRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    padding: "8px",
-    borderBottom: "1px solid #eee"
-  },
-  value: {
-    maxWidth: "60%",
-    wordBreak: "break-word"
-  },
-  expandBtn: {
-    background: "#3b82f6",
-    color: "white",
-    padding: "4px 8px",
-    borderRadius: "6px",
-    border: "none",
-    cursor: "pointer"
-  },
-  jsonBox: {
-    background: "#f1f5f9",
-    padding: "10px",
-    marginTop: "5px",
-    borderRadius: "8px",
-    maxHeight: "200px",
-    overflowY: "auto"
-  },
-  tableBox: {
-    marginTop: "10px"
-  },
-  innerTable: {
-    width: "100%",
-    borderCollapse: "collapse"
-  },
-  secondaryBtn: {
-    background: "#10b981",
-    color: "white",
-    padding: "6px 10px",
-    borderRadius: "6px",
-    border: "none"
-  },
-  closeBtn: {
-    background: "#ef4444",
-    color: "white",
-    padding: "6px 10px",
-    borderRadius: "6px",
-    border: "none"
-  }
+  modal: { background: "white", padding: "20px", width: "400px" },
+  modalHeader: { display: "flex", justifyContent: "space-between" },
+  innerTable: { width: "100%", marginTop: "10px", borderCollapse: "collapse" }
 };
 
 export default UsersTable;
