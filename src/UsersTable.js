@@ -61,7 +61,7 @@ function UsersTable() {
       {/* HEADER */}
       <div style={styles.header}>
         <div style={styles.brand}>
-          <img src="/logo.png" alt="logo" style={styles.logo} />
+          <img src={process.env.PUBLIC_URL + "/logo.png"} alt="logo" style={styles.logo} />
           <h1 style={styles.title}>User Dashboard</h1>
         </div>
 
@@ -163,7 +163,9 @@ function UsersTable() {
                     <strong>{key}</strong>
 
                     <div style={styles.value}>
-                      {(key === "ownedBy" || key === "trakeyeType" || key === "geofenceNames") && isObject ? (
+
+                      {/* ✅ GEOFENCE TABLE */}
+                      {key === "geofenceNames" ? (
                         <>
                           <button
                             onClick={() =>
@@ -175,19 +177,47 @@ function UsersTable() {
                           </button>
 
                           {expandedField === key && (
-                            <div style={styles.jsonBox}>
-                              {Array.isArray(value) ? (
-                                value.map((item, idx) => (
-                                  <div key={idx} style={{ marginBottom: "5px" }}>
-                                    {typeof item === "object"
-                                      ? JSON.stringify(item)
-                                      : item}
-                                  </div>
-                                ))
-                              ) : (
-                                <pre>{JSON.stringify(value, null, 2)}</pre>
-                              )}
+                            <div style={styles.tableBox}>
+                              <table style={styles.innerTable}>
+                                <thead>
+                                  <tr>
+                                    <th>#</th>
+                                    <th>Geofence Name</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {value && value.length > 0 ? (
+                                    value.map((geo, idx) => (
+                                      <tr key={idx}>
+                                        <td>{idx + 1}</td>
+                                        <td>{geo}</td>
+                                      </tr>
+                                    ))
+                                  ) : (
+                                    <tr>
+                                      <td colSpan="2">No Geofences</td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
                             </div>
+                          )}
+                        </>
+                      ) : (key === "ownedBy" || key === "trakeyeType") && isObject ? (
+                        <>
+                          <button
+                            onClick={() =>
+                              setExpandedField(expandedField === key ? null : key)
+                            }
+                            style={styles.expandBtn}
+                          >
+                            {expandedField === key ? "Hide" : "View"}
+                          </button>
+
+                          {expandedField === key && (
+                            <pre style={styles.jsonBox}>
+                              {JSON.stringify(value, null, 2)}
+                            </pre>
                           )}
                         </>
                       ) : isObject ? (
@@ -195,6 +225,7 @@ function UsersTable() {
                       ) : (
                         value?.toString()
                       )}
+
                     </div>
 
                   </div>
@@ -329,6 +360,13 @@ const styles = {
     borderRadius: "8px",
     maxHeight: "200px",
     overflowY: "auto"
+  },
+  tableBox: {
+    marginTop: "10px"
+  },
+  innerTable: {
+    width: "100%",
+    borderCollapse: "collapse"
   },
   secondaryBtn: {
     background: "#10b981",
