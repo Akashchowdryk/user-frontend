@@ -14,7 +14,7 @@ function UsersTable() {
   const usersPerPage = 10;
 
   useEffect(() => {
-    axios.get("https://user-extract.onrender.com/api/api-users")
+    axios.get("https://user-extract.onrender.com/api/all-users")
       .then(res => setUsers(res.data))
       .catch(err => console.log(err));
   }, []);
