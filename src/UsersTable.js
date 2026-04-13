@@ -32,9 +32,9 @@ function UsersTable() {
 
   }, []);
 
-  // 🚀 LOAD DISTRICTS
+  // 🚀 LOAD DISTRICTS (FROM BACKEND)
   useEffect(() => {
-    axios.get("https://sitpolycab.fiberify.com/api/user-geofences-by-type-master")
+    axios.get("https://user-extract.onrender.com/api/districts")
       .then(res => setDistricts(res.data));
   }, []);
 
@@ -42,40 +42,33 @@ function UsersTable() {
   useEffect(() => {
     if (!selectedDistrict) return;
 
-    axios.get(
-      `https://sitpolycab.fiberify.com/api/mini-geofences-by-masterGefenceId/${selectedDistrict}`
-    )
-    .then(res => setBlocks(res.data));
+    axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
+      .then(res => setBlocks(res.data));
 
   }, [selectedDistrict]);
 
-  // 🔥 MULTI BLOCK SELECT
+  // 🔥 MULTI SELECT HANDLER (STORE IDS)
   const handleBlockChange = (e) => {
     const options = Array.from(e.target.selectedOptions);
-    setSelectedBlocks(options.map(o => o.value));
+    setSelectedBlocks(options.map(o => Number(o.value)));
   };
 
-  // 🔍 FILTER LOGIC
+  // 🔍 FILTER (ID BASED)
   const filteredUsers = users.filter(user => {
 
     const matchSearch =
       user.login?.toLowerCase().includes(search.toLowerCase());
 
-    const selectedDistrictName =
-      districts.find(d => d.id == selectedDistrict)?.name || "";
-
     const matchDistrict =
       !selectedDistrict ||
-      user.geofenceNames?.some(g =>
-        g.toLowerCase().includes(selectedDistrictName.toLowerCase())
+      blocks.some(b =>
+        user.geofenceIds?.includes(b.id)
       );
 
     const matchBlocks =
       selectedBlocks.length === 0 ||
-      user.geofenceNames?.some(g =>
-        selectedBlocks.some(b =>
-          g.toLowerCase().includes(b.toLowerCase())
-        )
+      selectedBlocks.some(id =>
+        user.geofenceIds?.includes(id)
       );
 
     return matchSearch && matchDistrict && matchBlocks;
@@ -137,6 +130,7 @@ function UsersTable() {
 
       <div style={styles.topBar}>
 
+        {/* SEARCH */}
         <input
           placeholder="Search..."
           value={search}
@@ -147,7 +141,7 @@ function UsersTable() {
           style={styles.search}
         />
 
-        {/* 🔥 DISTRICT */}
+        {/* 🔥 DISTRICT (NAME DISPLAY, ID VALUE) */}
         <select
           value={selectedDistrict}
           onChange={(e) => {
@@ -159,7 +153,9 @@ function UsersTable() {
           <option value="">All Districts</option>
 
           {districts.map(d => (
-            <option key={d.id} value={d.id}>{d.name}</option>
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
           ))}
         </select>
 
@@ -172,7 +168,7 @@ function UsersTable() {
             style={styles.multiDropdown}
           >
             {blocks.map(b => (
-              <option key={b.id} value={b.name}>
+              <option key={b.id} value={b.id}>
                 {b.name}
               </option>
             ))}
@@ -184,6 +180,7 @@ function UsersTable() {
         </button>
       </div>
 
+      {/* TABLE */}
       {!loading && (
         <table style={styles.table}>
           <thead>
@@ -233,6 +230,7 @@ function UsersTable() {
         </table>
       )}
 
+      {/* PAGINATION */}
       {!loading && (
         <div style={styles.pagination}>
           <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}>Prev</button>
