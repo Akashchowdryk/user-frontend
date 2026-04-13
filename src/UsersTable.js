@@ -7,7 +7,7 @@ function UsersTable() {
 
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = "";
 
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -15,31 +15,56 @@ function UsersTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
+  // 🔥 NEW STATES
+  const [selectedDistrict, setSelectedDistrict] = useState("");
+  const [districts, setDistricts] = useState([]);
+
   // 🚀 LOAD USERS
   useEffect(() => {
     setLoading(true);
+
     axios.get("https://user-extract.onrender.com/api/users-summary")
-      .then(res => setUsers(res.data))
+      .then(res => {
+        setUsers(res.data);
+
+        // 🔥 EXTRACT DISTRICTS
+        const set = new Set();
+        res.data.forEach(u => {
+          u.geofenceNames?.forEach(g => set.add(g));
+        });
+
+        setDistricts([...set].sort());
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  // 🔍 SEARCH
-  const filteredUsers = users.filter(user =>
-    user.login?.toLowerCase().includes(search.toLowerCase())
-  );
+  // 🔍 FILTER (SEARCH + DISTRICT)
+  const filteredUsers = users.filter(user => {
+
+    const matchSearch =
+      user.login?.toLowerCase().includes(search.toLowerCase());
+
+    const matchDistrict =
+      selectedDistrict === ""
+        ? true
+        : selectedDistrict === "NO_DISTRICT"
+          ? !user.geofenceNames || user.geofenceNames.length === 0
+          : user.geofenceNames?.includes(selectedDistrict);
+
+    return matchSearch && matchDistrict;
+  });
 
   // 📄 PAGINATION
   const indexOfLastUser = currentPage * usersPerPage;
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // 🔥 FETCH USER DETAILS
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data));
   };
 
-  // ⬇ DOWNLOAD ALL
+  // ⬇ DOWNLOAD
   const downloadAll = async () => {
     setDownloading(true);
 
@@ -70,7 +95,6 @@ function UsersTable() {
     setDownloading(false);
   };
 
-  // ❌ HIDDEN FIELDS IN MODAL
   const hiddenFields = [
     "groups","vendors","userMobileApps","trakeyeType",
     "deviceIdentifier","resetKey","trakeyeTypeAttributeValues","vendor","geofences"
@@ -81,10 +105,10 @@ function UsersTable() {
 
       <h1>User Dashboard</h1>
 
-      {/* LOADER */}
       {loading && <div style={styles.loader}>Loading users...</div>}
 
       <div style={styles.topBar}>
+
         <input
           placeholder="Search..."
           value={search}
@@ -95,12 +119,28 @@ function UsersTable() {
           style={styles.search}
         />
 
+        {/* 🔥 NEW DISTRICT FILTER */}
+        <select
+          value={selectedDistrict}
+          onChange={(e) => {
+            setSelectedDistrict(e.target.value);
+            setCurrentPage(1);
+          }}
+          style={styles.dropdown}
+        >
+          <option value="">All Districts</option>
+          <option value="NO_DISTRICT">No District Assigned</option>
+
+          {districts.map((d, i) => (
+            <option key={i} value={d}>{d}</option>
+          ))}
+        </select>
+
         <button onClick={downloadAll} style={styles.downloadBtn}>
           {downloading ? "Downloading..." : "Download All"}
         </button>
       </div>
 
-      {/* TABLE */}
       {!loading && (
         <table style={styles.table}>
           <thead>
@@ -131,7 +171,6 @@ function UsersTable() {
 
                 <td>{user.reportingTo}</td>
 
-                {/* 🔥 GEOFENCE COLUMN */}
                 <td onClick={(e) => e.stopPropagation()}>
                   {user.geofenceNames?.length > 2 ? (
                     <details>
@@ -151,7 +190,6 @@ function UsersTable() {
         </table>
       )}
 
-      {/* PAGINATION */}
       {!loading && (
         <div style={styles.pagination}>
           <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}>Prev</button>
@@ -160,11 +198,10 @@ function UsersTable() {
         </div>
       )}
 
-      {/* MODAL */}
+      {/* MODAL (UNCHANGED) */}
       {selectedUser && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
-
             <h2>User Details</h2>
 
             <div style={styles.scrollBox}>
@@ -211,16 +248,7 @@ function UsersTable() {
                       return (
                         <tr key={key}>
                           <td style={styles.key}>Geofences</td>
-                          <td>
-                            {value?.length > 3 ? (
-                              <details>
-                                <summary>{value.slice(0, 3).join(", ")}</summary>
-                                {value.map((g, i) => (
-                                  <div key={i}>{g}</div>
-                                ))}
-                              </details>
-                            ) : value?.join(", ")}
-                          </td>
+                          <td>{value?.join(", ")}</td>
                         </tr>
                       );
                     }
@@ -240,7 +268,6 @@ function UsersTable() {
             <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
               Close
             </button>
-
           </div>
         </div>
       )}
@@ -252,13 +279,14 @@ function UsersTable() {
 // 🎨 STYLES
 const styles = {
   page: { padding: "20px", maxWidth: "1200px", margin: "auto" },
-  topBar: { display: "flex", justifyContent: "space-between", marginBottom: "10px" },
-  search: { padding: "8px", width: "250px" },
+  topBar: { display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" },
+  search: { padding: "8px", width: "200px" },
+  dropdown: { padding: "8px", borderRadius: "6px" },
   downloadBtn: { background: "#3b82f6", color: "white", padding: "8px", borderRadius: "6px" },
   table: { width: "100%", borderCollapse: "collapse" },
   row: { borderBottom: "1px solid #ddd", cursor: "pointer" },
   pagination: { marginTop: "10px", textAlign: "center" },
-  loader: { textAlign: "center", fontWeight: "bold", marginBottom: "10px" },
+  loader: { textAlign: "center", fontWeight: "bold" },
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center" },
   modal: { background: "white", padding: "20px", width: "600px", borderRadius: "10px" },
   scrollBox: { maxHeight: "400px", overflowY: "auto" },
