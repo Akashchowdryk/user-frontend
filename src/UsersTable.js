@@ -11,7 +11,7 @@ function UsersTable() {
 
   // 🚀 SINGLE API CALL
   useEffect(() => {
-    axios.get("https://your-backend-url/api/users-summary")
+    axios.get("https://user-extract.onrender.com/api/users-summary")
       .then(res => setUsers(res.data))
       .catch(err => console.error(err));
   }, []);
