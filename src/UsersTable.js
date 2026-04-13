@@ -6,45 +6,19 @@ import { saveAs } from "file-saver";
 function UsersTable() {
 
   const [users, setUsers] = useState([]);
-  const [userDetailsMap, setUserDetailsMap] = useState({});
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
+  const [showGeofence, setShowGeofence] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
-  // 🔥 Load basic users
+  // 🔥 Load users
   useEffect(() => {
     axios.get("https://user-extract.onrender.com/api/all-users")
       .then(res => setUsers(res.data))
       .catch(err => console.error(err));
   }, []);
-
-  // 🔥 Fetch details (activated + ownedBy)
-  useEffect(() => {
-
-    const fetchDetails = async () => {
-      const details = {};
-
-      for (let user of users) {
-        try {
-          const res = await axios.get(
-            `https://user-extract.onrender.com/api/user/${user.login}`
-          );
-          details[user.login] = res.data;
-        } catch (err) {
-          details[user.login] = null;
-        }
-      }
-
-      setUserDetailsMap(details);
-    };
-
-    if (users.length > 0) {
-      fetchDetails();
-    }
-
-  }, [users]);
 
   // 🔍 Search
   const filteredUsers = users.filter(user => {
@@ -60,14 +34,14 @@ function UsersTable() {
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // 🔥 Click user (open modal)
+  // 🔥 Fetch user details
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data))
       .catch(err => console.error(err));
   };
 
-  // ⬇ Download All
+  // ⬇ DOWNLOAD ALL (FULL DATA)
   const downloadAll = async () => {
 
     const detailedUsers = await Promise.all(
@@ -85,17 +59,21 @@ function UsersTable() {
             Name: `${data.firstName || ""} ${data.lastName || ""}`,
             Email: data.email,
             Activated: data.activated ? "Active" : "Inactive",
-            ReportingTo: data.ownedBy?.map(u => u.login).join(", ") || ""
+            ReportingTo: data.ownedBy?.map(u => u.login).join(", ") || "",
+            Authorities: data.authorities?.join(", ") || "",
+            Geofences: data.geofenceNames?.join(", ") || ""
           };
 
-        } catch {
+        } catch (err) {
           return {
             ID: user.id,
             Login: user.login,
             Name: `${user.firstName || ""} ${user.lastName || ""}`,
             Email: user.email,
             Activated: "ERROR",
-            ReportingTo: "ERROR"
+            ReportingTo: "ERROR",
+            Authorities: "ERROR",
+            Geofences: "ERROR"
           };
         }
       })
@@ -106,8 +84,36 @@ function UsersTable() {
     XLSX.utils.book_append_sheet(wb, ws, "Users");
 
     const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([buffer]), "users.xlsx");
+    saveAs(new Blob([buffer]), "users_full_data.xlsx");
   };
+
+  // ⬇ DOWNLOAD SINGLE USER
+  const downloadSingleUser = () => {
+    const data = {
+      ID: selectedUser.id,
+      Login: selectedUser.login,
+      Name: `${selectedUser.firstName || ""} ${selectedUser.lastName || ""}`,
+      Email: selectedUser.email,
+      Activated: selectedUser.activated ? "Active" : "Inactive",
+      ReportingTo: selectedUser.ownedBy?.map(u => u.login).join(", ") || "",
+      Authorities: selectedUser.authorities?.join(", ") || "",
+      Geofences: selectedUser.geofenceNames?.join(", ") || ""
+    };
+
+    const ws = XLSX.utils.json_to_sheet([data]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "User");
+
+    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    saveAs(new Blob([buffer]), `user_${selectedUser.id}.xlsx`);
+  };
+
+  // ❌ Hidden fields
+  const hiddenFields = [
+    "langKey","geofences","groups","vendors","userMobileApps",
+    "imei","gpsimei","deviceIdentifier","operatingSystem",
+    "resetKey","userImage","trakeyeType","trakeyeTypeAttributeValues","vendor"
+  ];
 
   return (
     <div style={styles.page}>
@@ -126,7 +132,7 @@ function UsersTable() {
         />
 
         <button onClick={downloadAll} style={styles.downloadBtn}>
-          Download
+          Download All
         </button>
       </div>
 
@@ -138,46 +144,18 @@ function UsersTable() {
             <th>Login</th>
             <th>Name</th>
             <th>Email</th>
-            <th>Status</th>
-            <th>Reporting To</th>
           </tr>
         </thead>
 
         <tbody>
-          {currentUsers.map((user, i) => {
-
-            const detail = userDetailsMap[user.login];
-
-            return (
-              <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
-
-                <td>{user.id}</td>
-                <td>{user.login}</td>
-                <td>{user.firstName} {user.lastName}</td>
-                <td>{user.email}</td>
-
-                {/* STATUS */}
-                <td>
-                  {detail ? (
-                    <span style={{
-                      color: detail.activated ? "green" : "red",
-                      fontWeight: "bold"
-                    }}>
-                      {detail.activated ? "Active" : "Inactive"}
-                    </span>
-                  ) : "Loading..."}
-                </td>
-
-                {/* REPORTING TO */}
-                <td>
-                  {detail
-                    ? detail.ownedBy?.map(u => u.login).join(", ") || "-"
-                    : "Loading..."}
-                </td>
-
-              </tr>
-            );
-          })}
+          {currentUsers.map((user, i) => (
+            <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
+              <td>{user.id}</td>
+              <td>{user.login}</td>
+              <td>{user.firstName} {user.lastName}</td>
+              <td>{user.email}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
 
@@ -195,11 +173,108 @@ function UsersTable() {
 
             <h2>User Details</h2>
 
-            <pre style={styles.jsonBox}>
-              {JSON.stringify(selectedUser, null, 2)}
-            </pre>
+            <div style={styles.scrollBox}>
+              <table style={styles.detailTable}>
+                <tbody>
 
-            <button onClick={() => setSelectedUser(null)}>Close</button>
+                  {Object.entries(selectedUser).map(([key, value]) => {
+
+                    if (hiddenFields.includes(key)) return null;
+
+                    // ✅ Activated
+                    if (key === "activated") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>activated</td>
+                          <td style={{
+                            color: value ? "green" : "red",
+                            fontWeight: "bold"
+                          }}>
+                            {value ? "Active" : "Inactive"}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // ✅ Reporting To
+                    if (key === "ownedBy") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>reportingTo</td>
+                          <td>
+                            {value?.map((u, i) => (
+                              <div key={i} style={styles.tag}>{u.login}</div>
+                            ))}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <tr key={key}>
+                        <td style={styles.key}>{key}</td>
+                        <td>
+
+                          {/* AUTHORITIES */}
+                          {key === "authorities" ? (
+                            value.map((role, i) => (
+                              <div key={i} style={styles.tag}>{role}</div>
+                            ))
+                          )
+
+                          /* GEOFENCE */
+                          : key === "geofenceNames" ? (
+                            <>
+                              <button
+                                style={styles.viewBtn}
+                                onClick={() => setShowGeofence(true)}
+                              >
+                                View
+                              </button>
+
+                              {showGeofence && (
+                                <div style={styles.overlay}>
+                                  <div style={styles.subModal}>
+                                    <h3>Geofences</h3>
+
+                                    <div style={styles.scrollBox}>
+                                      {value?.map((g, i) => (
+                                        <div key={i} style={styles.geo}>{g}</div>
+                                      ))}
+                                    </div>
+
+                                    <button onClick={() => setShowGeofence(false)}>
+                                      Close
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )
+
+                          : typeof value === "object"
+                          ? JSON.stringify(value)
+                          : value?.toString()
+                          }
+
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                </tbody>
+              </table>
+            </div>
+
+            <div style={styles.modalActions}>
+              <button onClick={downloadSingleUser} style={styles.downloadBtn}>
+                Download User
+              </button>
+
+              <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
+                Close
+              </button>
+            </div>
 
           </div>
         </div>
@@ -260,11 +335,61 @@ const styles = {
     borderRadius: "10px"
   },
 
-  jsonBox: {
-    maxHeight: "400px",
-    overflowY: "auto",
-    background: "#f1f5f9",
-    padding: "10px"
+  subModal: {
+    background: "white",
+    padding: "20px",
+    width: "400px",
+    borderRadius: "10px"
+  },
+
+  scrollBox: {
+    maxHeight: "300px",
+    overflowY: "auto"
+  },
+
+  detailTable: {
+    width: "100%"
+  },
+
+  key: {
+    fontWeight: "bold",
+    width: "40%"
+  },
+
+  tag: {
+    background: "#eef2ff",
+    marginBottom: "5px",
+    padding: "5px",
+    borderRadius: "6px"
+  },
+
+  geo: {
+    background: "#e0f2fe",
+    marginBottom: "5px",
+    padding: "5px",
+    borderRadius: "6px"
+  },
+
+  viewBtn: {
+    background: "#6366f1",
+    color: "white",
+    padding: "5px 10px",
+    borderRadius: "6px",
+    border: "none"
+  },
+
+  modalActions: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: "10px"
+  },
+
+  closeBtn: {
+    background: "#ef4444",
+    color: "white",
+    padding: "8px",
+    border: "none",
+    borderRadius: "6px"
   }
 };
 
