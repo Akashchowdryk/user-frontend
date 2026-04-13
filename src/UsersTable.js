@@ -13,14 +13,14 @@ function UsersTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
-  // 🔥 Load users
+  // Load users
   useEffect(() => {
     axios.get("https://user-extract.onrender.com/api/all-users")
       .then(res => setUsers(res.data))
       .catch(err => console.error(err));
   }, []);
 
-  // 🔍 Search
+  // Search
   const filteredUsers = users.filter(user => {
     const text = search.toLowerCase();
     return (
@@ -34,14 +34,14 @@ function UsersTable() {
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // 🔥 Click user
+  // Click user
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data))
       .catch(err => console.error(err));
   };
 
-  // ⬇ DOWNLOAD ALL USERS (FIXED 🔥)
+  //  DOWNLOAD ALL USERS 
   const downloadAll = async () => {
 
     const detailedUsers = await Promise.all(
@@ -80,7 +80,7 @@ function UsersTable() {
     saveAs(new Blob([buffer]), "users_full_data.xlsx");
   };
 
-  // ⬇ SINGLE USER DOWNLOAD
+  // SINGLE USER DOWNLOAD
   const downloadSingleUser = () => {
     const data = {
       ID: selectedUser.id,
@@ -99,7 +99,7 @@ function UsersTable() {
     saveAs(new Blob([buffer]), `user_${selectedUser.id}.xlsx`);
   };
 
-  // ❌ Hidden fields
+  //Hidden fields
   const hiddenFields = [
     "ownedBy","langKey","geofences","groups","vendors","userMobileApps",
     "imei","gpsimei","deviceIdentifier","operatingSystem",
