@@ -17,23 +17,20 @@ function UsersTable() {
       .then(res => setUsers(res.data));
   }, []);
 
-  // 🔍 Search
   const filteredUsers = users.filter(u =>
     u.login?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // 📄 Pagination
   const indexOfLastUser = currentPage * usersPerPage;
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // 🔥 FETCH USER
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data));
   };
 
-  // 🔥 CLEAN DATA FOR DOWNLOAD
+  // ⬇ DOWNLOAD
   const formatUser = (data) => ({
     Login: data.login,
     Name: `${data.firstName || ""} ${data.lastName || ""}`,
@@ -44,38 +41,20 @@ function UsersTable() {
     Geofences: data.geofenceNames?.join(", ")
   });
 
-  // ⬇ DOWNLOAD ALL (CLEAN)
   const downloadAll = async () => {
-
-    const detailedUsers = await Promise.all(
-      users.map(async (user) => {
-        try {
-          const res = await axios.get(
-            `https://user-extract.onrender.com/api/user/${user.login}`
-          );
-          return formatUser(res.data);
-        } catch {
-          return { Login: user.login, Status: "ERROR" };
-        }
+    const data = await Promise.all(
+      users.map(async u => {
+        const res = await axios.get(`https://user-extract.onrender.com/api/user/${u.login}`);
+        return formatUser(res.data);
       })
     );
 
-    const ws = XLSX.utils.json_to_sheet(detailedUsers);
+    const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Users");
 
     const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([buffer]), "users_clean.xlsx");
-  };
-
-  // ⬇ DOWNLOAD SINGLE
-  const downloadSingleUser = () => {
-    const ws = XLSX.utils.json_to_sheet([formatUser(selectedUser)]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "User");
-
-    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([buffer]), `user_${selectedUser.login}.xlsx`);
+    saveAs(new Blob([buffer]), "users.xlsx");
   };
 
   return (
@@ -106,15 +85,55 @@ function UsersTable() {
             <th>Login</th>
             <th>Name</th>
             <th>Phone</th>
+            <th>Status</th>
+            <th>Roles</th>
+            <th>Geofences</th>
           </tr>
         </thead>
 
         <tbody>
           {currentUsers.map((user, i) => (
             <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
+
               <td>{user.login}</td>
               <td>{user.name}</td>
               <td>{user.phone}</td>
+
+              <td style={{
+                color: user.activated ? "green" : "red",
+                fontWeight: "bold"
+              }}>
+                {user.activated ? "Active" : "Inactive"}
+              </td>
+
+              {/* ROLES */}
+              <td onClick={(e) => e.stopPropagation()}>
+                {user.roles?.length > 2 ? (
+                  <details>
+                    <summary>{user.roles.slice(0, 2).join(", ")}</summary>
+                    {user.roles.map((r, i) => (
+                      <div key={i}>{r}</div>
+                    ))}
+                  </details>
+                ) : user.roles?.map((r, i) => (
+                  <div key={i}>{r}</div>
+                ))}
+              </td>
+
+              {/* GEOFENCES */}
+              <td onClick={(e) => e.stopPropagation()}>
+                {user.geofenceNames?.length > 2 ? (
+                  <details>
+                    <summary>{user.geofenceNames.slice(0, 2).join(", ")}</summary>
+                    {user.geofenceNames.map((g, i) => (
+                      <div key={i}>{g}</div>
+                    ))}
+                  </details>
+                ) : user.geofenceNames?.map((g, i) => (
+                  <div key={i}>{g}</div>
+                ))}
+              </td>
+
             </tr>
           ))}
         </tbody>
@@ -134,73 +153,63 @@ function UsersTable() {
 
             <h2>User Details</h2>
 
-            <table style={styles.detailTable}>
-              <tbody>
+            {/* 🔥 SCROLL FIX */}
+            <div style={styles.scrollBox}>
 
-                <tr>
-                  <td style={styles.key}>Login</td>
-                  <td>{selectedUser.login}</td>
-                </tr>
+              <table style={styles.detailTable}>
+                <tbody>
 
-                <tr>
-                  <td style={styles.key}>Name</td>
-                  <td>{selectedUser.firstName} {selectedUser.lastName}</td>
-                </tr>
+                  <tr>
+                    <td style={styles.key}>Login</td>
+                    <td>{selectedUser.login}</td>
+                  </tr>
 
-                <tr>
-                  <td style={styles.key}>Phone</td>
-                  <td>{selectedUser.phone}</td>
-                </tr>
+                  <tr>
+                    <td style={styles.key}>Name</td>
+                    <td>{selectedUser.firstName} {selectedUser.lastName}</td>
+                  </tr>
 
-                <tr>
-                  <td style={styles.key}>Status</td>
-                  <td style={{
-                    color: selectedUser.activated ? "green" : "red",
-                    fontWeight: "bold"
-                  }}>
-                    {selectedUser.activated ? "Active" : "Inactive"}
-                  </td>
-                </tr>
+                  <tr>
+                    <td style={styles.key}>Phone</td>
+                    <td>{selectedUser.phone}</td>
+                  </tr>
 
-                <tr>
-                  <td style={styles.key}>Reporting To</td>
-                  <td>
-                    {selectedUser.ownedBy?.map((u, i) => (
-                      <div key={i} style={styles.tag}>{u.login}</div>
-                    ))}
-                  </td>
-                </tr>
+                  <tr>
+                    <td style={styles.key}>Status</td>
+                    <td style={{
+                      color: selectedUser.activated ? "green" : "red",
+                      fontWeight: "bold"
+                    }}>
+                      {selectedUser.activated ? "Active" : "Inactive"}
+                    </td>
+                  </tr>
 
-                <tr>
-                  <td style={styles.key}>Roles</td>
-                  <td>
-                    {selectedUser.authorities?.map((r, i) => (
-                      <div key={i} style={styles.tag}>{r}</div>
-                    ))}
-                  </td>
-                </tr>
+                  <tr>
+                    <td style={styles.key}>Roles</td>
+                    <td>
+                      {selectedUser.authorities?.map((r, i) => (
+                        <div key={i} style={styles.tag}>{r}</div>
+                      ))}
+                    </td>
+                  </tr>
 
-                <tr>
-                  <td style={styles.key}>Geofences</td>
-                  <td>
-                    {selectedUser.geofenceNames?.map((g, i) => (
-                      <div key={i} style={styles.geo}>{g}</div>
-                    ))}
-                  </td>
-                </tr>
+                  <tr>
+                    <td style={styles.key}>Geofences</td>
+                    <td>
+                      {selectedUser.geofenceNames?.map((g, i) => (
+                        <div key={i} style={styles.geo}>{g}</div>
+                      ))}
+                    </td>
+                  </tr>
 
-              </tbody>
-            </table>
+                </tbody>
+              </table>
 
-            <div style={styles.modalActions}>
-              <button onClick={downloadSingleUser} style={styles.downloadBtn}>
-                Download User
-              </button>
-
-              <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
-                Close
-              </button>
             </div>
+
+            <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
+              Close
+            </button>
 
           </div>
         </div>
@@ -210,22 +219,30 @@ function UsersTable() {
   );
 }
 
-// 🎨 STYLES
 const styles = {
-  page: { padding: "20px", maxWidth: "1000px", margin: "auto" },
+  page: { padding: "20px", maxWidth: "1100px", margin: "auto" },
   topBar: { display: "flex", justifyContent: "space-between", marginBottom: "10px" },
   search: { padding: "8px", width: "250px" },
   downloadBtn: { background: "#3b82f6", color: "white", padding: "8px", borderRadius: "6px" },
   table: { width: "100%", borderCollapse: "collapse" },
   row: { borderBottom: "1px solid #ddd", cursor: "pointer" },
   pagination: { marginTop: "10px", textAlign: "center" },
+
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center" },
   modal: { background: "white", padding: "20px", width: "600px", borderRadius: "10px" },
+
+  scrollBox: {
+    maxHeight: "400px",
+    overflowY: "auto",
+    marginBottom: "10px"
+  },
+
   detailTable: { width: "100%" },
   key: { fontWeight: "bold", width: "40%" },
-  tag: { background: "#eef2ff", margin: "3px 0", padding: "5px", borderRadius: "6px" },
-  geo: { background: "#e0f2fe", margin: "3px 0", padding: "5px", borderRadius: "6px" },
-  modalActions: { display: "flex", justifyContent: "space-between", marginTop: "10px" },
+
+  tag: { background: "#eef2ff", padding: "5px", marginBottom: "5px", borderRadius: "6px" },
+  geo: { background: "#e0f2fe", padding: "5px", marginBottom: "5px", borderRadius: "6px" },
+
   closeBtn: { background: "#ef4444", color: "white", padding: "8px", borderRadius: "6px" }
 };
 
