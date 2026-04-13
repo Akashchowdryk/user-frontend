@@ -29,7 +29,7 @@ function UsersTable() {
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // 🔥 FETCH FULL USER
+  // 🔥 CLICK USER
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data))
@@ -45,13 +45,6 @@ function UsersTable() {
     const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     saveAs(new Blob([buffer]), "users.xlsx");
   };
-
-  // ❌ HIDDEN FIELDS
-  const hiddenFields = [
-    "groups","vendors","userMobileApps","isMobileDeviceTracking",
-    "trakeyeType","deviceIdentifier","resetKey",
-    "trakeyeTypeAttributeValues","vendor"
-  ];
 
   return (
     <div style={styles.page}>
@@ -83,6 +76,7 @@ function UsersTable() {
             <th>Email</th>
             <th>Status</th>
             <th>Reporting To</th>
+            <th>Roles</th>
             <th>Geofences</th>
           </tr>
         </thead>
@@ -106,17 +100,39 @@ function UsersTable() {
 
               <td>{user.reportingTo}</td>
 
-              {/* 🔥 GEOFENCE FRONT PAGE */}
-              <td>
-                {user.geofenceNames && user.geofenceNames.length > 3 ? (
-                  <details>
-                    <summary>{user.geofenceNames.slice(0, 3).join(", ")}</summary>
-                    {user.geofenceNames.map((g, idx) => (
-                      <div key={idx}>{g}</div>
-                    ))}
+              {/* 🔥 ROLES */}
+              <td onClick={(e) => e.stopPropagation()}>
+                {user.roles?.length > 2 ? (
+                  <details style={styles.dropdown}>
+                    <summary>{user.roles.slice(0, 2).join(", ")}</summary>
+                    <div style={styles.dropdownBox}>
+                      {user.roles.map((r, idx) => (
+                        <div key={idx} style={styles.item}>{r}</div>
+                      ))}
+                    </div>
                   </details>
                 ) : (
-                  user.geofenceNames?.join(", ")
+                  user.roles?.map((r, i) => (
+                    <div key={i} style={styles.item}>{r}</div>
+                  ))
+                )}
+              </td>
+
+              {/* 🔥 GEOFENCE */}
+              <td onClick={(e) => e.stopPropagation()}>
+                {user.geofenceNames?.length > 2 ? (
+                  <details style={styles.dropdown}>
+                    <summary>{user.geofenceNames.slice(0, 2).join(", ")}</summary>
+                    <div style={styles.dropdownBox}>
+                      {user.geofenceNames.map((g, idx) => (
+                        <div key={idx} style={styles.item}>{g}</div>
+                      ))}
+                    </div>
+                  </details>
+                ) : (
+                  user.geofenceNames?.map((g, i) => (
+                    <div key={i} style={styles.item}>{g}</div>
+                  ))
                 )}
               </td>
 
@@ -140,79 +156,7 @@ function UsersTable() {
             <h2>User Details</h2>
 
             <div style={styles.scrollBox}>
-              <table style={styles.detailTable}>
-                <tbody>
-
-                  {Object.entries(selectedUser).map(([key, value]) => {
-
-                    if (hiddenFields.includes(key)) return null;
-
-                    // ✅ Activated
-                    if (key === "activated") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>activated</td>
-                          <td style={{
-                            color: value ? "green" : "red",
-                            fontWeight: "bold"
-                          }}>
-                            {value ? "Active" : "Inactive"}
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    // ✅ Reporting To
-                    if (key === "ownedBy") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>reportingTo</td>
-                          <td>
-                            {value?.map((u, i) => (
-                              <div key={i}>{u.login}</div>
-                            ))}
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    // 🔥 GEOFENCE MODAL
-                    if (key === "geofenceNames") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>geofenceNames</td>
-                          <td>
-                            {value && value.length > 3 ? (
-                              <details>
-                                <summary>{value.slice(0, 3).join(", ")}</summary>
-                                {value.map((g, i) => (
-                                  <div key={i}>{g}</div>
-                                ))}
-                              </details>
-                            ) : (
-                              value?.join(", ")
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return (
-                      <tr key={key}>
-                        <td style={styles.key}>{key}</td>
-                        <td>
-                          {Array.isArray(value)
-                            ? value.join(", ")
-                            : typeof value === "object"
-                            ? JSON.stringify(value)
-                            : value?.toString()}
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                </tbody>
-              </table>
+              <pre>{JSON.stringify(selectedUser, null, 2)}</pre>
             </div>
 
             <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
@@ -239,9 +183,11 @@ const styles = {
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center" },
   modal: { background: "white", padding: "20px", width: "600px", borderRadius: "10px" },
   scrollBox: { maxHeight: "400px", overflowY: "auto" },
-  detailTable: { width: "100%" },
-  key: { fontWeight: "bold", width: "40%" },
-  closeBtn: { background: "#ef4444", color: "white", padding: "8px", border: "none", borderRadius: "6px" }
+  closeBtn: { background: "#ef4444", color: "white", padding: "8px", border: "none", borderRadius: "6px" },
+
+  dropdown: { cursor: "pointer" },
+  dropdownBox: { marginTop: "5px", background: "#f8fafc", padding: "6px", borderRadius: "6px", border: "1px solid #ddd" },
+  item: { padding: "3px 0", fontSize: "13px" }
 };
 
 export default UsersTable;
