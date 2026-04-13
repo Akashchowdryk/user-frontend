@@ -41,11 +41,17 @@ function UsersTable() {
   // 🚀 BLOCKS
   useEffect(() => {
     if (!selectedDistrict) return;
+  
 
     axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
       .then(res => setBlocks(res.data));
   }, [selectedDistrict]);
-
+useEffect(() => {
+  window.scrollTo({
+    top: 200,
+    behavior: "smooth"
+  });
+}, [currentPage]);
   // 🔍 FILTER
   const filteredUsers = users.filter(user => {
 
