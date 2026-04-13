@@ -7,7 +7,7 @@ function UsersTable() {
 
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [search, setSearch] = "";
+  const [search, setSearch] = useState(""); // ✅ FIXED
 
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -19,7 +19,7 @@ function UsersTable() {
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [districts, setDistricts] = useState([]);
 
-  // 🚀 LOAD USERS
+  // 🚀 LOAD USERS + DISTRICTS
   useEffect(() => {
     setLoading(true);
 
@@ -27,18 +27,23 @@ function UsersTable() {
       .then(res => {
         setUsers(res.data);
 
-        // 🔥 EXTRACT DISTRICTS
+        // ✅ FIXED DISTRICT EXTRACTION
         const set = new Set();
+
         res.data.forEach(u => {
-          u.geofenceNames?.forEach(g => set.add(g));
+          u.geofenceNames?.forEach(g => {
+            if (g) set.add(g.trim());
+          });
         });
 
-        setDistricts([...set].sort());
+        setDistricts([...set].sort((a, b) => a.localeCompare(b)));
       })
+      .catch(err => console.error(err))
       .finally(() => setLoading(false));
+
   }, []);
 
-  // 🔍 FILTER (SEARCH + DISTRICT)
+  // 🔍 FILTER (SEARCH + DISTRICT FIXED)
   const filteredUsers = users.filter(user => {
 
     const matchSearch =
@@ -49,7 +54,9 @@ function UsersTable() {
         ? true
         : selectedDistrict === "NO_DISTRICT"
           ? !user.geofenceNames || user.geofenceNames.length === 0
-          : user.geofenceNames?.includes(selectedDistrict);
+          : user.geofenceNames?.some(g =>
+              g.toLowerCase() === selectedDistrict.toLowerCase()
+            );
 
     return matchSearch && matchDistrict;
   });
@@ -59,6 +66,7 @@ function UsersTable() {
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
+  // 🔥 USER DETAILS
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data));
@@ -119,7 +127,7 @@ function UsersTable() {
           style={styles.search}
         />
 
-        {/* 🔥 NEW DISTRICT FILTER */}
+        {/* 🔥 DISTRICT FILTER */}
         <select
           value={selectedDistrict}
           onChange={(e) => {
@@ -198,7 +206,7 @@ function UsersTable() {
         </div>
       )}
 
-      {/* MODAL (UNCHANGED) */}
+      {/* MODAL */}
       {selectedUser && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
@@ -268,6 +276,7 @@ function UsersTable() {
             <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
               Close
             </button>
+
           </div>
         </div>
       )}
