@@ -9,7 +9,7 @@ function UsersTable() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [search, setSearch] = useState("");
 
-  const [loading, setLoading] = useState(true); // 🔥 LOADER
+  const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -33,38 +33,34 @@ function UsersTable() {
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // 🔥 FETCH USER
+  // 🔥 FETCH USER DETAILS
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data));
   };
 
-  // ⬇ DOWNLOAD ALL (WITH LOADER)
+  // ⬇ DOWNLOAD ALL
   const downloadAll = async () => {
-
     setDownloading(true);
 
-    const detailedUsers = await Promise.all(
-      users.map(async (user) => {
-        const res = await axios.get(
-          `https://user-extract.onrender.com/api/user/${user.login}`
-        );
-
-        const data = res.data;
+    const data = await Promise.all(
+      users.map(async u => {
+        const res = await axios.get(`https://user-extract.onrender.com/api/user/${u.login}`);
+        const d = res.data;
 
         return {
-          Login: data.login,
-          Name: `${data.firstName || ""} ${data.lastName || ""}`,
-          Phone: data.phone,
-          Status: data.activated ? "Active" : "Inactive",
-          ReportingTo: data.ownedBy?.map(u => u.login).join(", "),
-          Roles: data.authorities?.join(", "),
-          Geofences: data.geofenceNames?.join(", ")
+          Login: d.login,
+          Name: `${d.firstName || ""} ${d.lastName || ""}`,
+          Phone: d.phone,
+          Status: d.activated ? "Active" : "Inactive",
+          ReportingTo: d.ownedBy?.map(x => x.login).join(", "),
+          Roles: d.authorities?.join(", "),
+          Geofences: d.geofenceNames?.join(", ")
         };
       })
     );
 
-    const ws = XLSX.utils.json_to_sheet(detailedUsers);
+    const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Users");
 
@@ -74,7 +70,7 @@ function UsersTable() {
     setDownloading(false);
   };
 
-  // ❌ HIDDEN FIELDS
+  // ❌ HIDDEN FIELDS IN MODAL
   const hiddenFields = [
     "groups","vendors","userMobileApps","trakeyeType",
     "deviceIdentifier","resetKey","trakeyeTypeAttributeValues","vendor","geofences"
@@ -85,7 +81,7 @@ function UsersTable() {
 
       <h1>User Dashboard</h1>
 
-      {/* 🔥 GLOBAL LOADER */}
+      {/* LOADER */}
       {loading && <div style={styles.loader}>Loading users...</div>}
 
       <div style={styles.topBar}>
@@ -114,12 +110,14 @@ function UsersTable() {
               <th>Phone</th>
               <th>Status</th>
               <th>Reporting To</th>
+              <th>Geofences</th>
             </tr>
           </thead>
 
           <tbody>
             {currentUsers.map((user, i) => (
               <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
+
                 <td>{user.login}</td>
                 <td>{user.name}</td>
                 <td>{user.phone}</td>
@@ -132,6 +130,21 @@ function UsersTable() {
                 </td>
 
                 <td>{user.reportingTo}</td>
+
+                {/* 🔥 GEOFENCE COLUMN */}
+                <td onClick={(e) => e.stopPropagation()}>
+                  {user.geofenceNames?.length > 2 ? (
+                    <details>
+                      <summary>{user.geofenceNames.slice(0, 2).join(", ")}</summary>
+                      {user.geofenceNames.map((g, i) => (
+                        <div key={i}>{g}</div>
+                      ))}
+                    </details>
+                  ) : (
+                    user.geofenceNames?.join(", ")
+                  )}
+                </td>
+
               </tr>
             ))}
           </tbody>
@@ -162,7 +175,6 @@ function UsersTable() {
 
                     if (hiddenFields.includes(key)) return null;
 
-                    // STATUS
                     if (key === "activated") {
                       return (
                         <tr key={key}>
@@ -177,7 +189,6 @@ function UsersTable() {
                       );
                     }
 
-                    // REPORTING
                     if (key === "ownedBy") {
                       return (
                         <tr key={key}>
@@ -187,7 +198,6 @@ function UsersTable() {
                       );
                     }
 
-                    // ROLES
                     if (key === "authorities") {
                       return (
                         <tr key={key}>
@@ -197,7 +207,6 @@ function UsersTable() {
                       );
                     }
 
-                    // GEOFENCE
                     if (key === "geofenceNames") {
                       return (
                         <tr key={key}>
@@ -249,13 +258,7 @@ const styles = {
   table: { width: "100%", borderCollapse: "collapse" },
   row: { borderBottom: "1px solid #ddd", cursor: "pointer" },
   pagination: { marginTop: "10px", textAlign: "center" },
-
-  loader: {
-    textAlign: "center",
-    marginBottom: "10px",
-    fontWeight: "bold"
-  },
-
+  loader: { textAlign: "center", fontWeight: "bold", marginBottom: "10px" },
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center" },
   modal: { background: "white", padding: "20px", width: "600px", borderRadius: "10px" },
   scrollBox: { maxHeight: "400px", overflowY: "auto" },
