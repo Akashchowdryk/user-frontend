@@ -7,7 +7,7 @@ function UsersTable() {
 
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [search, setSearch] = useState(""); // ✅ FIXED
+  const [search, setSearch] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -15,50 +15,70 @@ function UsersTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
-  // 🔥 NEW STATES
-  const [selectedDistrict, setSelectedDistrict] = useState("");
+  // 🔥 DISTRICT + BLOCK STATES
   const [districts, setDistricts] = useState([]);
+  const [selectedDistrict, setSelectedDistrict] = useState("");
 
-  // 🚀 LOAD USERS + DISTRICTS
+  const [blocks, setBlocks] = useState([]);
+  const [selectedBlocks, setSelectedBlocks] = useState([]);
+
+  // 🚀 LOAD USERS
   useEffect(() => {
     setLoading(true);
 
     axios.get("https://user-extract.onrender.com/api/users-summary")
-      .then(res => {
-        setUsers(res.data);
-
-        // ✅ FIXED DISTRICT EXTRACTION
-        const set = new Set();
-
-        res.data.forEach(u => {
-          u.geofenceNames?.forEach(g => {
-            if (g) set.add(g.trim());
-          });
-        });
-
-        setDistricts([...set].sort((a, b) => a.localeCompare(b)));
-      })
-      .catch(err => console.error(err))
+      .then(res => setUsers(res.data))
       .finally(() => setLoading(false));
 
   }, []);
 
-  // 🔍 FILTER (SEARCH + DISTRICT FIXED)
+  // 🚀 LOAD DISTRICTS
+  useEffect(() => {
+    axios.get("https://sitpolycab.fiberify.com/api/user-geofences-by-type-master")
+      .then(res => setDistricts(res.data));
+  }, []);
+
+  // 🚀 LOAD BLOCKS WHEN DISTRICT SELECTED
+  useEffect(() => {
+    if (!selectedDistrict) return;
+
+    axios.get(
+      `https://sitpolycab.fiberify.com/api/mini-geofences-by-masterGefenceId/${selectedDistrict}`
+    )
+    .then(res => setBlocks(res.data));
+
+  }, [selectedDistrict]);
+
+  // 🔥 MULTI BLOCK SELECT
+  const handleBlockChange = (e) => {
+    const options = Array.from(e.target.selectedOptions);
+    setSelectedBlocks(options.map(o => o.value));
+  };
+
+  // 🔍 FILTER LOGIC
   const filteredUsers = users.filter(user => {
 
     const matchSearch =
       user.login?.toLowerCase().includes(search.toLowerCase());
 
-    const matchDistrict =
-      selectedDistrict === ""
-        ? true
-        : selectedDistrict === "NO_DISTRICT"
-          ? !user.geofenceNames || user.geofenceNames.length === 0
-          : user.geofenceNames?.some(g =>
-              g.toLowerCase() === selectedDistrict.toLowerCase()
-            );
+    const selectedDistrictName =
+      districts.find(d => d.id == selectedDistrict)?.name || "";
 
-    return matchSearch && matchDistrict;
+    const matchDistrict =
+      !selectedDistrict ||
+      user.geofenceNames?.some(g =>
+        g.toLowerCase().includes(selectedDistrictName.toLowerCase())
+      );
+
+    const matchBlocks =
+      selectedBlocks.length === 0 ||
+      user.geofenceNames?.some(g =>
+        selectedBlocks.some(b =>
+          g.toLowerCase().includes(b.toLowerCase())
+        )
+      );
+
+    return matchSearch && matchDistrict && matchBlocks;
   });
 
   // 📄 PAGINATION
@@ -127,22 +147,37 @@ function UsersTable() {
           style={styles.search}
         />
 
-        {/* 🔥 DISTRICT FILTER */}
+        {/* 🔥 DISTRICT */}
         <select
           value={selectedDistrict}
           onChange={(e) => {
             setSelectedDistrict(e.target.value);
-            setCurrentPage(1);
+            setSelectedBlocks([]);
           }}
           style={styles.dropdown}
         >
           <option value="">All Districts</option>
-          <option value="NO_DISTRICT">No District Assigned</option>
 
-          {districts.map((d, i) => (
-            <option key={i} value={d}>{d}</option>
+          {districts.map(d => (
+            <option key={d.id} value={d.id}>{d.name}</option>
           ))}
         </select>
+
+        {/* 🔥 BLOCK MULTI SELECT */}
+        {selectedDistrict && (
+          <select
+            multiple
+            value={selectedBlocks}
+            onChange={handleBlockChange}
+            style={styles.multiDropdown}
+          >
+            {blocks.map(b => (
+              <option key={b.id} value={b.name}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        )}
 
         <button onClick={downloadAll} style={styles.downloadBtn}>
           {downloading ? "Downloading..." : "Download All"}
@@ -291,6 +326,7 @@ const styles = {
   topBar: { display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" },
   search: { padding: "8px", width: "200px" },
   dropdown: { padding: "8px", borderRadius: "6px" },
+  multiDropdown: { padding: "8px", height: "100px", borderRadius: "6px" },
   downloadBtn: { background: "#3b82f6", color: "white", padding: "8px", borderRadius: "6px" },
   table: { width: "100%", borderCollapse: "collapse" },
   row: { borderBottom: "1px solid #ddd", cursor: "pointer" },
