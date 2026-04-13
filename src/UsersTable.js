@@ -16,7 +16,7 @@ function UsersTable() {
 
   // 🔥 Load users
   useEffect(() => {
-    axios.get("https://user-extract.onrender.com/api/all-users")
+    axios.get("https://user-extract.onrender.com/api/users-summary")
       .then(res => setUsers(res.data))
       .catch(err => console.error(err));
   }, []);
