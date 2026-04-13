@@ -13,6 +13,7 @@ function UsersTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
+  // 🔥 Load users
   useEffect(() => {
     axios.get("https://user-extract.onrender.com/api/all-users")
       .then(res => setUsers(res.data))
@@ -40,14 +41,70 @@ function UsersTable() {
       .catch(err => console.error(err));
   };
 
-  // ⬇ Download All
-  const downloadAll = () => {
-    const ws = XLSX.utils.json_to_sheet(users);
+  // ⬇ DOWNLOAD ALL USERS (FIXED 🔥)
+  const downloadAll = async () => {
+
+    const detailedUsers = await Promise.all(
+      users.map(async (user) => {
+        try {
+          const res = await axios.get(
+            `https://user-extract.onrender.com/api/user/${user.login}`
+          );
+
+          const data = res.data;
+
+          return {
+            ID: data.id,
+            Login: data.login,
+            Name: `${data.firstName || ""} ${data.lastName || ""}`,
+            Email: data.email,
+
+            Authorities: data.authorities?.join(", ") || "",
+            Geofences: data.geofenceNames?.join(", ") || ""
+          };
+
+        } catch (err) {
+          console.error("Error:", user.login);
+          return null;
+        }
+      })
+    );
+
+    const cleaned = detailedUsers.filter(Boolean);
+
+    const ws = XLSX.utils.json_to_sheet(cleaned);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Users");
+
     const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([buffer]), "users.xlsx");
+    saveAs(new Blob([buffer]), "users_full_data.xlsx");
   };
+
+  // ⬇ SINGLE USER DOWNLOAD
+  const downloadSingleUser = () => {
+    const data = {
+      ID: selectedUser.id,
+      Login: selectedUser.login,
+      Name: `${selectedUser.firstName || ""} ${selectedUser.lastName || ""}`,
+      Email: selectedUser.email,
+      Authorities: selectedUser.authorities?.join(", ") || "",
+      Geofences: selectedUser.geofenceNames?.join(", ") || ""
+    };
+
+    const ws = XLSX.utils.json_to_sheet([data]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "User");
+
+    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    saveAs(new Blob([buffer]), `user_${selectedUser.id}.xlsx`);
+  };
+
+  // ❌ Hidden fields
+  const hiddenFields = [
+    "ownedBy","langKey","geofences","groups","vendors","userMobileApps",
+    "imei","gpsimei","deviceIdentifier","operatingSystem",
+    "resetKey","userImage","trakeyeType","trakeyeTypeAttributeValues","vendor"
+  ];
 
   return (
     <div style={styles.page}>
@@ -70,7 +127,7 @@ function UsersTable() {
         </button>
       </div>
 
-      {/* ✅ TABLE FIXED */}
+      {/* TABLE */}
       <table style={styles.table}>
         <thead>
           <tr>
@@ -83,7 +140,7 @@ function UsersTable() {
 
         <tbody>
           {currentUsers.map((user, i) => (
-            <tr key={i} onClick={() => handleUserClick(user)} style={styles.row}>
+            <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
               <td>{user.id}</td>
               <td>{user.login}</td>
               <td>{user.firstName} {user.lastName}</td>
@@ -100,88 +157,87 @@ function UsersTable() {
         <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>Next</button>
       </div>
 
-      {/* MAIN MODAL */}
+      {/* MODAL */}
       {selectedUser && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
 
             <h2>User Details</h2>
 
-            <table style={styles.detailTable}>
-              <tbody>
+            <div style={styles.scrollBox}>
+              <table style={styles.detailTable}>
+                <tbody>
 
-                {Object.entries(selectedUser).map(([key, value]) => {
+                  {Object.entries(selectedUser).map(([key, value]) => {
 
-                  // ❌ REMOVE FIELDS
-                  if ([
-                    "ownedBy","langKey","geofences","groups","vendors",
-                    "userMobileApps","imei","gpsimei","deviceIdentifier",
-                    "operatingSystem","resetKey","userImage",
-                    "trakeyeType","trakeyeTypeAttributeValues","vendor"
-                  ].includes(key)) return null;
+                    if (hiddenFields.includes(key)) return null;
 
-                  return (
-                    <tr key={key}>
-                      <td style={styles.key}>{key}</td>
+                    return (
+                      <tr key={key}>
+                        <td style={styles.key}>{key}</td>
 
-                      <td>
+                        <td>
 
-                        {/* ✅ AUTHORITIES */}
-                        {key === "authorities" ? (
-                          value.map((role, i) => (
-                            <div key={i} style={styles.tag}>{role}</div>
-                          ))
-                        )
+                          {/* AUTHORITIES */}
+                          {key === "authorities" ? (
+                            value.map((role, i) => (
+                              <div key={i} style={styles.tag}>{role}</div>
+                            ))
+                          )
 
-                        /* ✅ GEOFENCE BUTTON */
-                        : key === "geofenceNames" ? (
-                          <>
-                            <button
-                              style={styles.viewBtn}
-                              onClick={() => setShowGeofence(true)}
-                            >
-                              View
-                            </button>
+                          /* GEOFENCE */
+                          : key === "geofenceNames" ? (
+                            <>
+                              <button
+                                style={styles.viewBtn}
+                                onClick={() => setShowGeofence(true)}
+                              >
+                                View
+                              </button>
 
-                            {/* SUB MODAL */}
-                            {showGeofence && (
-                              <div style={styles.overlay}>
-                                <div style={styles.subModal}>
-                                  <h3>Geofences</h3>
+                              {showGeofence && (
+                                <div style={styles.overlay}>
+                                  <div style={styles.subModal}>
+                                    <h3>Geofences</h3>
 
-                                  <div style={styles.scrollBox}>
-                                    {value?.length > 0 ? (
-                                      value.map((g, i) => (
+                                    <div style={styles.scrollBox}>
+                                      {value?.map((g, i) => (
                                         <div key={i} style={styles.geo}>{g}</div>
-                                      ))
-                                    ) : (
-                                      <p>No Geofence</p>
-                                    )}
+                                      ))}
+                                    </div>
+
+                                    <button onClick={() => setShowGeofence(false)}>
+                                      Close
+                                    </button>
                                   </div>
-
-                                  <button onClick={() => setShowGeofence(false)}>
-                                    Close
-                                  </button>
                                 </div>
-                              </div>
-                            )}
-                          </>
-                        )
+                              )}
+                            </>
+                          )
 
-                        : typeof value === "object"
-                        ? JSON.stringify(value)
-                        : value?.toString()
-                        }
+                          : typeof value === "object"
+                          ? JSON.stringify(value)
+                          : value?.toString()
+                          }
 
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                      </tr>
+                    );
+                  })}
 
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
 
-            <button onClick={() => setSelectedUser(null)}>Close</button>
+            <div style={styles.modalActions}>
+              <button onClick={downloadSingleUser} style={styles.downloadBtn}>
+                Download User
+              </button>
+
+              <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
+                Close
+              </button>
+            </div>
 
           </div>
         </div>
@@ -191,13 +247,9 @@ function UsersTable() {
   );
 }
 
-// 🎨 STYLES (FIXED WIDTH + ALIGNMENT)
+// 🎨 STYLES
 const styles = {
-  page: {
-    padding: "20px",
-    maxWidth: "1200px",
-    margin: "auto"
-  },
+  page: { padding: "20px", maxWidth: "1200px", margin: "auto" },
 
   topBar: {
     display: "flex",
@@ -292,6 +344,20 @@ const styles = {
     padding: "5px 10px",
     borderRadius: "6px",
     border: "none"
+  },
+
+  modalActions: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: "10px"
+  },
+
+  closeBtn: {
+    background: "#ef4444",
+    color: "white",
+    padding: "8px",
+    border: "none",
+    borderRadius: "6px"
   }
 };
 
