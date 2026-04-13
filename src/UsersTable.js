@@ -13,14 +13,14 @@ function UsersTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
-  // Load users
+  // 🔥 Load users
   useEffect(() => {
     axios.get("https://user-extract.onrender.com/api/all-users")
       .then(res => setUsers(res.data))
       .catch(err => console.error(err));
   }, []);
 
-  // Search
+  // 🔍 Search
   const filteredUsers = users.filter(user => {
     const text = search.toLowerCase();
     return (
@@ -34,14 +34,14 @@ function UsersTable() {
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // Click user
+  // 🔥 Fetch user details
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data))
       .catch(err => console.error(err));
   };
 
-  //  DOWNLOAD ALL USERS 
+  // ⬇ DOWNLOAD ALL (FULL DATA)
   const downloadAll = async () => {
 
     const detailedUsers = await Promise.all(
@@ -58,21 +58,28 @@ function UsersTable() {
             Login: data.login,
             Name: `${data.firstName || ""} ${data.lastName || ""}`,
             Email: data.email,
-
+            Activated: data.activated ? "Active" : "Inactive",
+            ReportingTo: data.ownedBy?.map(u => u.login).join(", ") || "",
             Authorities: data.authorities?.join(", ") || "",
             Geofences: data.geofenceNames?.join(", ") || ""
           };
 
         } catch (err) {
-          console.error("Error:", user.login);
-          return null;
+          return {
+            ID: user.id,
+            Login: user.login,
+            Name: `${user.firstName || ""} ${user.lastName || ""}`,
+            Email: user.email,
+            Activated: "ERROR",
+            ReportingTo: "ERROR",
+            Authorities: "ERROR",
+            Geofences: "ERROR"
+          };
         }
       })
     );
 
-    const cleaned = detailedUsers.filter(Boolean);
-
-    const ws = XLSX.utils.json_to_sheet(cleaned);
+    const ws = XLSX.utils.json_to_sheet(detailedUsers);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Users");
 
@@ -80,13 +87,15 @@ function UsersTable() {
     saveAs(new Blob([buffer]), "users_full_data.xlsx");
   };
 
-  // SINGLE USER DOWNLOAD
+  // ⬇ DOWNLOAD SINGLE USER
   const downloadSingleUser = () => {
     const data = {
       ID: selectedUser.id,
       Login: selectedUser.login,
       Name: `${selectedUser.firstName || ""} ${selectedUser.lastName || ""}`,
       Email: selectedUser.email,
+      Activated: selectedUser.activated ? "Active" : "Inactive",
+      ReportingTo: selectedUser.ownedBy?.map(u => u.login).join(", ") || "",
       Authorities: selectedUser.authorities?.join(", ") || "",
       Geofences: selectedUser.geofenceNames?.join(", ") || ""
     };
@@ -99,9 +108,9 @@ function UsersTable() {
     saveAs(new Blob([buffer]), `user_${selectedUser.id}.xlsx`);
   };
 
-  //Hidden fields
+  // ❌ Hidden fields
   const hiddenFields = [
-    "ownedBy","langKey","geofences","groups","vendors","userMobileApps",
+    "langKey","geofences","groups","vendors","userMobileApps",
     "imei","gpsimei","deviceIdentifier","operatingSystem",
     "resetKey","userImage","trakeyeType","trakeyeTypeAttributeValues","vendor"
   ];
@@ -172,10 +181,38 @@ function UsersTable() {
 
                     if (hiddenFields.includes(key)) return null;
 
+                    // ✅ Activated
+                    if (key === "activated") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>activated</td>
+                          <td style={{
+                            color: value ? "green" : "red",
+                            fontWeight: "bold"
+                          }}>
+                            {value ? "Active" : "Inactive"}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // ✅ Reporting To
+                    if (key === "ownedBy") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>reportingTo</td>
+                          <td>
+                            {value?.map((u, i) => (
+                              <div key={i} style={styles.tag}>{u.login}</div>
+                            ))}
+                          </td>
+                        </tr>
+                      );
+                    }
+
                     return (
                       <tr key={key}>
                         <td style={styles.key}>{key}</td>
-
                         <td>
 
                           {/* AUTHORITIES */}
@@ -257,23 +294,19 @@ const styles = {
     marginBottom: "10px"
   },
 
-  search: {
-    padding: "8px",
-    width: "250px"
-  },
+  search: { padding: "8px", width: "250px" },
 
   downloadBtn: {
     background: "#3b82f6",
     color: "white",
-    padding: "8px 12px",
+    padding: "8px",
     border: "none",
     borderRadius: "6px"
   },
 
   table: {
     width: "100%",
-    borderCollapse: "collapse",
-    tableLayout: "fixed"
+    borderCollapse: "collapse"
   },
 
   row: {
@@ -315,8 +348,7 @@ const styles = {
   },
 
   detailTable: {
-    width: "100%",
-    borderCollapse: "collapse"
+    width: "100%"
   },
 
   key: {
