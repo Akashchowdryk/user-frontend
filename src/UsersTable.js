@@ -6,30 +6,31 @@ import { saveAs } from "file-saver";
 function UsersTable() {
 
   const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
   const [search, setSearch] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedUser, setSelectedUser] = useState(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
-  // 🚀 FAST SUMMARY API
+  // 🚀 FAST API
   useEffect(() => {
     axios.get("https://user-extract.onrender.com/api/users-summary")
       .then(res => setUsers(res.data))
       .catch(err => console.error(err));
   }, []);
 
-  // 🔍 Search
-  const filteredUsers = users.filter(user =>
-    user.login?.toLowerCase().includes(search.toLowerCase())
-  );
+  // 🔍 SEARCH
+  const filteredUsers = users.filter(user => {
+    const text = search.toLowerCase();
+    return user.login?.toLowerCase().includes(text);
+  });
 
-  // 📄 Pagination
+  // 📄 PAGINATION
   const indexOfLastUser = currentPage * usersPerPage;
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // 🔥 CLICK USER → FETCH FULL DETAILS
+  // 🔥 CLICK USER
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data))
@@ -46,16 +47,6 @@ function UsersTable() {
     saveAs(new Blob([buffer]), "users.xlsx");
   };
 
-  // ⬇ DOWNLOAD SINGLE USER
-  const downloadSingleUser = () => {
-    const ws = XLSX.utils.json_to_sheet([selectedUser]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "User");
-
-    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([buffer]), `user_${selectedUser.login}.xlsx`);
-  };
-
   return (
     <div style={styles.page}>
 
@@ -65,7 +56,10 @@ function UsersTable() {
         <input
           placeholder="Search..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setCurrentPage(1);
+          }}
           style={styles.search}
         />
 
@@ -78,7 +72,6 @@ function UsersTable() {
       <table style={styles.table}>
         <thead>
           <tr>
-            <th>ID</th>
             <th>Login</th>
             <th>Name</th>
             <th>Email</th>
@@ -91,17 +84,16 @@ function UsersTable() {
           {currentUsers.map((user, i) => (
             <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
 
-              <td>{user.id}</td>
               <td>{user.login}</td>
               <td>{user.name}</td>
               <td>{user.email}</td>
 
               <td>
                 <span style={{
-                  color: user.activated === true ? "green" : "red",
+                  color: user.activated ? "green" : "red",
                   fontWeight: "bold"
                 }}>
-                  {user.activated === true ? "Active" : "Inactive"}
+                  {user.activated ? "Active" : "Inactive"}
                 </span>
               </td>
 
@@ -126,19 +118,60 @@ function UsersTable() {
 
             <h2>User Details</h2>
 
-            <pre style={styles.jsonBox}>
-              {JSON.stringify(selectedUser, null, 2)}
-            </pre>
+            <div style={styles.scrollBox}>
+              <table style={styles.detailTable}>
+                <tbody>
 
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <button onClick={downloadSingleUser} style={styles.downloadBtn}>
-                Download User
-              </button>
+                  {Object.entries(selectedUser).map(([key, value]) => {
 
-              <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
-                Close
-              </button>
+                    // ✅ Activated
+                    if (key === "activated") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>activated</td>
+                          <td style={{
+                            color: value ? "green" : "red",
+                            fontWeight: "bold"
+                          }}>
+                            {value ? "Active" : "Inactive"}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // ✅ Reporting To
+                    if (key === "ownedBy") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>reportingTo</td>
+                          <td>
+                            {value?.map((u, i) => (
+                              <div key={i}>{u.login}</div>
+                            ))}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <tr key={key}>
+                        <td style={styles.key}>{key}</td>
+                        <td>
+                          {typeof value === "object"
+                            ? JSON.stringify(value, null, 1)
+                            : value?.toString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                </tbody>
+              </table>
             </div>
+
+            <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
+              Close
+            </button>
 
           </div>
         </div>
@@ -199,11 +232,18 @@ const styles = {
     borderRadius: "10px"
   },
 
-  jsonBox: {
+  scrollBox: {
     maxHeight: "400px",
-    overflowY: "auto",
-    background: "#f1f5f9",
-    padding: "10px"
+    overflowY: "auto"
+  },
+
+  detailTable: {
+    width: "100%"
+  },
+
+  key: {
+    fontWeight: "bold",
+    width: "40%"
   },
 
   closeBtn: {
