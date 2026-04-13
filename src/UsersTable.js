@@ -15,43 +15,37 @@ function UsersTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
-  // 🔥 DISTRICT + BLOCK STATES
   const [districts, setDistricts] = useState([]);
   const [selectedDistrict, setSelectedDistrict] = useState("");
 
   const [blocks, setBlocks] = useState([]);
   const [selectedBlocks, setSelectedBlocks] = useState([]);
 
+  // 🔥 NEW (dropdown control)
+  const [showBlockDropdown, setShowBlockDropdown] = useState(false);
+
   // 🚀 LOAD USERS
   useEffect(() => {
     setLoading(true);
-
     axios.get("https://user-extract.onrender.com/api/users-summary")
       .then(res => setUsers(res.data))
+      .catch(err => console.error(err))
       .finally(() => setLoading(false));
-
   }, []);
 
-  // 🚀 LOAD DISTRICTS (FROM BACKEND)
+  // 🚀 DISTRICTS
   useEffect(() => {
     axios.get("https://user-extract.onrender.com/api/districts")
       .then(res => setDistricts(res.data));
   }, []);
 
-  // 🚀 LOAD BLOCKS WHEN DISTRICT SELECTED
+  // 🚀 BLOCKS
   useEffect(() => {
     if (!selectedDistrict) return;
 
     axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
       .then(res => setBlocks(res.data));
-
   }, [selectedDistrict]);
-
-  // 🔥 MULTI SELECT HANDLER (STORE IDS)
-  const handleBlockChange = (e) => {
-    const options = Array.from(e.target.selectedOptions);
-    setSelectedBlocks(options.map(o => Number(o.value)));
-  };
 
   // 🔍 FILTER (ID BASED)
   const filteredUsers = users.filter(user => {
@@ -79,10 +73,11 @@ function UsersTable() {
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // 🔥 USER DETAILS
+  // 🔥 USER CLICK
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
-      .then(res => setSelectedUser(res.data));
+      .then(res => setSelectedUser(res.data))
+      .catch(err => console.error(err));
   };
 
   // ⬇ DOWNLOAD
@@ -141,7 +136,7 @@ function UsersTable() {
           style={styles.search}
         />
 
-        {/* 🔥 DISTRICT (NAME DISPLAY, ID VALUE) */}
+        {/* DISTRICT */}
         <select
           value={selectedDistrict}
           onChange={(e) => {
@@ -151,28 +146,51 @@ function UsersTable() {
           style={styles.dropdown}
         >
           <option value="">All Districts</option>
-
           {districts.map(d => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
+            <option key={d.id} value={d.id}>{d.name}</option>
           ))}
         </select>
 
-        {/* 🔥 BLOCK MULTI SELECT */}
+        {/* 🔥 BLOCK DROPDOWN */}
         {selectedDistrict && (
-          <select
-            multiple
-            value={selectedBlocks}
-            onChange={handleBlockChange}
-            style={styles.multiDropdown}
-          >
-            {blocks.map(b => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
+          <div style={styles.dropdownWrapper}>
+
+            <button
+              onClick={() => setShowBlockDropdown(!showBlockDropdown)}
+              style={styles.dropdownBtn}
+            >
+              {selectedBlocks.length > 0
+                ? `${selectedBlocks.length} Blocks Selected`
+                : "Select Blocks"}
+            </button>
+
+            {showBlockDropdown && (
+              <div style={styles.dropdownMenu}>
+
+                {blocks.map(b => (
+                  <div
+                    key={b.id}
+                    style={styles.dropdownItem}
+                    onClick={() => {
+                      if (selectedBlocks.includes(b.id)) {
+                        setSelectedBlocks(selectedBlocks.filter(id => id !== b.id));
+                      } else {
+                        setSelectedBlocks([...selectedBlocks, b.id]);
+                      }
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedBlocks.includes(b.id)}
+                      readOnly
+                    />
+                    <span>{b.name}</span>
+                  </div>
+                ))}
+
+              </div>
+            )}
+          </div>
         )}
 
         <button onClick={downloadAll} style={styles.downloadBtn}>
@@ -197,33 +215,19 @@ function UsersTable() {
           <tbody>
             {currentUsers.map((user, i) => (
               <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
-
                 <td>{user.login}</td>
                 <td>{user.name}</td>
                 <td>{user.phone}</td>
 
-                <td style={{
-                  color: user.activated ? "green" : "red",
-                  fontWeight: "bold"
-                }}>
+                <td style={{ color: user.activated ? "green" : "red" }}>
                   {user.activated ? "Active" : "Inactive"}
                 </td>
 
                 <td>{user.reportingTo}</td>
 
                 <td onClick={(e) => e.stopPropagation()}>
-                  {user.geofenceNames?.length > 2 ? (
-                    <details>
-                      <summary>{user.geofenceNames.slice(0, 2).join(", ")}</summary>
-                      {user.geofenceNames.map((g, i) => (
-                        <div key={i}>{g}</div>
-                      ))}
-                    </details>
-                  ) : (
-                    user.geofenceNames?.join(", ")
-                  )}
+                  {user.geofenceNames?.join(", ")}
                 </td>
-
               </tr>
             ))}
           </tbody>
@@ -246,70 +250,12 @@ function UsersTable() {
             <h2>User Details</h2>
 
             <div style={styles.scrollBox}>
-              <table style={styles.detailTable}>
-                <tbody>
-
-                  {Object.entries(selectedUser).map(([key, value]) => {
-
-                    if (hiddenFields.includes(key)) return null;
-
-                    if (key === "activated") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Status</td>
-                          <td style={{
-                            color: value ? "green" : "red",
-                            fontWeight: "bold"
-                          }}>
-                            {value ? "Active" : "Inactive"}
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    if (key === "ownedBy") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Reporting To</td>
-                          <td>{value?.map(v => v.login).join(", ")}</td>
-                        </tr>
-                      );
-                    }
-
-                    if (key === "authorities") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Roles</td>
-                          <td>{value?.join(", ")}</td>
-                        </tr>
-                      );
-                    }
-
-                    if (key === "geofenceNames") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Geofences</td>
-                          <td>{value?.join(", ")}</td>
-                        </tr>
-                      );
-                    }
-
-                    return (
-                      <tr key={key}>
-                        <td style={styles.key}>{key}</td>
-                        <td>{Array.isArray(value) ? value.join(", ") : value?.toString()}</td>
-                      </tr>
-                    );
-                  })}
-
-                </tbody>
-              </table>
+              <pre>{JSON.stringify(selectedUser, null, 2)}</pre>
             </div>
 
             <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
               Close
             </button>
-
           </div>
         </div>
       )}
@@ -322,20 +268,29 @@ function UsersTable() {
 const styles = {
   page: { padding: "20px", maxWidth: "1200px", margin: "auto" },
   topBar: { display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" },
-  search: { padding: "8px", width: "200px" },
-  dropdown: { padding: "8px", borderRadius: "6px" },
-  multiDropdown: { padding: "8px", height: "100px", borderRadius: "6px" },
-  downloadBtn: { background: "#3b82f6", color: "white", padding: "8px", borderRadius: "6px" },
-  table: { width: "100%", borderCollapse: "collapse" },
-  row: { borderBottom: "1px solid #ddd", cursor: "pointer" },
-  pagination: { marginTop: "10px", textAlign: "center" },
-  loader: { textAlign: "center", fontWeight: "bold" },
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center" },
-  modal: { background: "white", padding: "20px", width: "600px", borderRadius: "10px" },
+  search: { padding: "8px" },
+  dropdown: { padding: "8px" },
+  dropdownWrapper: { position: "relative" },
+  dropdownBtn: { padding: "8px", cursor: "pointer" },
+  dropdownMenu: {
+    position: "absolute",
+    top: "40px",
+    width: "200px",
+    maxHeight: "200px",
+    overflowY: "auto",
+    background: "white",
+    border: "1px solid #ccc"
+  },
+  dropdownItem: { padding: "6px", display: "flex", gap: "8px", cursor: "pointer" },
+  downloadBtn: { padding: "8px" },
+  table: { width: "100%" },
+  row: { cursor: "pointer" },
+  pagination: { marginTop: "10px" },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)" },
+  modal: { background: "white", padding: "20px", margin: "50px auto", width: "60%" },
   scrollBox: { maxHeight: "400px", overflowY: "auto" },
-  detailTable: { width: "100%" },
-  key: { fontWeight: "bold", width: "40%" },
-  closeBtn: { background: "#ef4444", color: "white", padding: "8px", borderRadius: "6px" }
+  closeBtn: { marginTop: "10px" },
+  loader: { textAlign: "center" }
 };
 
 export default UsersTable;
