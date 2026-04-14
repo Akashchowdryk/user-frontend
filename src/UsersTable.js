@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -9,6 +9,8 @@ function UsersTable() {
   const [selectedUser, setSelectedUser] = useState(null);
 
   const [search, setSearch] = useState("");
+  const [selectedReportingTo, setSelectedReportingTo] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [blocksLoading, setBlocksLoading] = useState(false);
@@ -26,10 +28,10 @@ function UsersTable() {
   const [roles, setRoles] = useState([]);
   const [selectedRoles, setSelectedRoles] = useState([]);
 
+  const [reportingList, setReportingList] = useState([]);
+
   const [showBlockDropdown, setShowBlockDropdown] = useState(false);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
-
-  const tableRef = useRef(null);
 
   // USERS
   useEffect(() => {
@@ -39,11 +41,17 @@ function UsersTable() {
       .then(res => {
         setUsers(res.data);
 
+        // roles
         const roleSet = new Set();
+        const reportingSet = new Set();
+
         res.data.forEach(u => {
           u.roles?.forEach(r => roleSet.add(r));
+          if (u.reportingTo) reportingSet.add(u.reportingTo);
         });
+
         setRoles([...roleSet]);
+        setReportingList([...reportingSet]);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -70,6 +78,10 @@ function UsersTable() {
     const matchSearch =
       user.login?.toLowerCase().includes(search.toLowerCase());
 
+    const matchReporting =
+      !selectedReportingTo ||
+      user.reportingTo === selectedReportingTo;
+
     const matchDistrict =
       !selectedDistrict ||
       blocks.some(b => user.geofenceNames?.includes(b.name));
@@ -86,23 +98,18 @@ function UsersTable() {
         )
       );
 
-    return matchSearch && matchDistrict && matchRoles && matchBlocks;
+    return matchSearch && matchReporting && matchDistrict && matchRoles && matchBlocks;
   });
 
   const indexOfLastUser = currentPage * usersPerPage;
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // CLICK USER
+  // USER CLICK
   const handleUserClick = (user) => {
-
     setGlobalLoading(true);
 
-    // 🔥 FIX SCROLL
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth"
-    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
 
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data))
@@ -153,6 +160,18 @@ function UsersTable() {
           style={styles.input}
         />
 
+        {/* REPORTING TO */}
+        <select
+          value={selectedReportingTo}
+          onChange={(e) => setSelectedReportingTo(e.target.value)}
+          style={styles.dropdown}
+        >
+          <option value="">All Reporting</option>
+          {reportingList.map(r => (
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+
         {/* DISTRICT */}
         <select
           value={selectedDistrict}
@@ -173,9 +192,7 @@ function UsersTable() {
         {selectedDistrict && (
           <div style={styles.dropdownWrapper}>
             <button onClick={() => setShowRoleDropdown(!showRoleDropdown)} style={styles.dropdown}>
-              {selectedRoles.length > 0
-                ? `${selectedRoles.length} Roles Selected`
-                : "Select Roles"}
+              Select Roles
             </button>
 
             {showRoleDropdown && (
@@ -183,13 +200,11 @@ function UsersTable() {
                 {roles.map(r => (
                   <div key={r} style={styles.dropdownItem}
                     onClick={() => {
-                      if (selectedRoles.includes(r)) {
-                        setSelectedRoles(selectedRoles.filter(x => x !== r));
-                      } else {
-                        setSelectedRoles([...selectedRoles, r]);
-                      }
+                      setSelectedRoles(prev =>
+                        prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]
+                      );
+                      setShowRoleDropdown(false); // 🔥 CLOSE AFTER SELECT
                     }}>
-                    <input type="checkbox" checked={selectedRoles.includes(r)} readOnly />
                     {r}
                   </div>
                 ))}
@@ -202,24 +217,29 @@ function UsersTable() {
         {selectedDistrict && (
           <div style={styles.dropdownWrapper}>
             <button onClick={() => setShowBlockDropdown(!showBlockDropdown)} style={styles.dropdown}>
-              {blocksLoading ? "Loading..." :
-                selectedBlocks.length > 0
-                  ? `${selectedBlocks.length} Blocks Selected`
-                  : "Select Blocks"}
+              Select Blocks
             </button>
 
             {showBlockDropdown && (
               <div style={styles.dropdownMenu}>
+
+                {/* SELECT ALL */}
+                <div style={styles.dropdownItem}
+                  onClick={() => {
+                    setSelectedBlocks(blocks.map(b => b.id));
+                    setShowBlockDropdown(false);
+                  }}>
+                  ✅ Select All
+                </div>
+
                 {blocks.map(b => (
                   <div key={b.id} style={styles.dropdownItem}
                     onClick={() => {
-                      if (selectedBlocks.includes(b.id)) {
-                        setSelectedBlocks(selectedBlocks.filter(id => id !== b.id));
-                      } else {
-                        setSelectedBlocks([...selectedBlocks, b.id]);
-                      }
+                      setSelectedBlocks(prev =>
+                        prev.includes(b.id) ? prev.filter(id => id !== b.id) : [...prev, b.id]
+                      );
+                      setShowBlockDropdown(false); // 🔥 CLOSE
                     }}>
-                    <input type="checkbox" checked={selectedBlocks.includes(b.id)} readOnly />
                     {b.name}
                   </div>
                 ))}
@@ -255,23 +275,13 @@ function UsersTable() {
               <td>{user.login}</td>
               <td>{user.name}</td>
               <td>{user.phone}</td>
-
               <td style={{ color: user.activated ? "green" : "red" }}>
                 {user.activated ? "Active" : "Inactive"}
               </td>
-
-              <td>{user.roles?.map((r, i) => <div key={i}>{r}</div>)}</td>
+              <td>{user.roles?.join(", ")}</td>
               <td>{user.version}</td>
               <td>{user.reportingTo}</td>
-
-              <td>
-                {user.geofenceNames?.length > 2 ? (
-                  <details>
-                    <summary>{user.geofenceNames.slice(0, 2).join(", ")}</summary>
-                    {user.geofenceNames.map((g, i) => <div key={i}>{g}</div>)}
-                  </details>
-                ) : user.geofenceNames?.join(", ")}
-              </td>
+              <td>{user.geofenceNames?.join(", ")}</td>
             </tr>
           ))}
         </tbody>
@@ -284,71 +294,10 @@ function UsersTable() {
         <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>Next</button>
       </div>
 
-      {/* MODAL */}
-      {selectedUser && (
-        <div style={styles.overlay}>
-          <div style={styles.modal}>
-            <h2>User Details</h2>
-
-            <div style={styles.modalContent}>
-              <table style={styles.detailTable}>
-                <tbody>
-
-                  <tr><td style={styles.key}>Login</td><td>{selectedUser.login}</td></tr>
-                  <tr><td style={styles.key}>Name</td><td>{selectedUser.firstName} {selectedUser.lastName}</td></tr>
-                  <tr><td style={styles.key}>Phone</td><td>{selectedUser.phone}</td></tr>
-
-                  <tr>
-                    <td style={styles.key}>Status</td>
-                    <td style={{ color: selectedUser.activated ? "green" : "red" }}>
-                      {selectedUser.activated ? "Active" : "Inactive"}
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <td style={styles.key}>Reporting To</td>
-                    <td>{selectedUser.ownedBy?.map(o => o.login).join(", ")}</td>
-                  </tr>
-
-                  <tr>
-                    <td style={styles.key}>Roles</td>
-                    <td>{selectedUser.authorities?.map((r, i) => <div key={i}>{r}</div>)}</td>
-                  </tr>
-
-                  <tr>
-                    <td style={styles.key}>Version</td>
-                    <td>{selectedUser.applicationVersion}</td>
-                  </tr>
-
-                  <tr>
-                    <td style={styles.key}>Geofences</td>
-                    <td>
-                      {selectedUser.geofenceNames?.length > 2 ? (
-                        <details>
-                          <summary>{selectedUser.geofenceNames.slice(0, 2).join(", ")}</summary>
-                          {selectedUser.geofenceNames.map((g, i) => <div key={i}>{g}</div>)}
-                        </details>
-                      ) : selectedUser.geofenceNames?.join(", ")}
-                    </td>
-                  </tr>
-
-                </tbody>
-              </table>
-            </div>
-
-            <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
-              Close
-            </button>
-
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }
 
-// STYLES
 const styles = {
   page: { padding: "20px" },
   topBar: { display: "flex", gap: "10px", flexWrap: "wrap" },
@@ -361,12 +310,6 @@ const styles = {
   table: { width: "100%" },
   row: { cursor: "pointer" },
   pagination: { display: "flex", justifyContent: "center", gap: "10px" },
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center" },
-  modal: { background: "white", padding: "20px", width: "60%", borderRadius: "10px" },
-  modalContent: { maxHeight: "60vh", overflowY: "auto" },
-  detailTable: { width: "100%" },
-  key: { fontWeight: "bold", width: "40%" },
-  closeBtn: { background: "#dc2626", color: "white", padding: "10px" },
   loader: { textAlign: "center" }
 };
 
