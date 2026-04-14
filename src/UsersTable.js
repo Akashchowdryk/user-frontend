@@ -16,9 +16,6 @@ function UsersTable() {
   const [blocksLoading, setBlocksLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const usersPerPage = 10;
-
   const [districts, setDistricts] = useState([]);
   const [selectedDistrict, setSelectedDistrict] = useState("");
 
@@ -33,6 +30,9 @@ function UsersTable() {
   const [showBlockDropdown, setShowBlockDropdown] = useState(false);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const usersPerPage = 10;
+
   // USERS
   useEffect(() => {
     setLoading(true);
@@ -41,7 +41,6 @@ function UsersTable() {
       .then(res => {
         setUsers(res.data);
 
-        // roles
         const roleSet = new Set();
         const reportingSet = new Set();
 
@@ -72,19 +71,14 @@ function UsersTable() {
       .finally(() => setBlocksLoading(false));
   }, [selectedDistrict]);
 
-  // FILTER
+  // FILTER LOGIC
   const filteredUsers = users.filter(user => {
 
     const matchSearch =
       user.login?.toLowerCase().includes(search.toLowerCase());
 
     const matchReporting =
-      !selectedReportingTo ||
-      user.reportingTo === selectedReportingTo;
-
-    const matchDistrict =
-      !selectedDistrict ||
-      blocks.some(b => user.geofenceNames?.includes(b.name));
+      !selectedReportingTo || user.reportingTo === selectedReportingTo;
 
     const matchRoles =
       selectedRoles.length === 0 ||
@@ -98,14 +92,14 @@ function UsersTable() {
         )
       );
 
-    return matchSearch && matchReporting && matchDistrict && matchRoles && matchBlocks;
+    return matchSearch && matchReporting && matchRoles && matchBlocks;
   });
 
   const indexOfLastUser = currentPage * usersPerPage;
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // USER CLICK
+  // CLICK USER
   const handleUserClick = (user) => {
     setGlobalLoading(true);
 
@@ -127,8 +121,7 @@ function UsersTable() {
       Status: u.activated ? "Active" : "Inactive",
       ReportingTo: u.reportingTo,
       Roles: u.roles?.join(", "),
-      Version: u.version,
-      Geofences: u.geofenceNames?.join(", ")
+      Version: u.version
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -144,13 +137,13 @@ function UsersTable() {
   return (
     <div style={styles.page}>
 
-      <h1>User Dashboard</h1>
+      <h2>User Dashboard</h2>
 
       {(loading || globalLoading) && (
         <div style={styles.loader}>⏳ Loading...</div>
       )}
 
-      {/* FILTERS */}
+      {/* FILTER BAR */}
       <div style={styles.topBar}>
 
         <input
@@ -160,7 +153,7 @@ function UsersTable() {
           style={styles.input}
         />
 
-        {/* REPORTING TO */}
+        {/* REPORTING */}
         <select
           value={selectedReportingTo}
           onChange={(e) => setSelectedReportingTo(e.target.value)}
@@ -203,7 +196,7 @@ function UsersTable() {
                       setSelectedRoles(prev =>
                         prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]
                       );
-                      setShowRoleDropdown(false); // 🔥 CLOSE AFTER SELECT
+                      setShowRoleDropdown(false);
                     }}>
                     {r}
                   </div>
@@ -223,13 +216,12 @@ function UsersTable() {
             {showBlockDropdown && (
               <div style={styles.dropdownMenu}>
 
-                {/* SELECT ALL */}
-                <div style={styles.dropdownItem}
+                <div style={styles.selectAll}
                   onClick={() => {
                     setSelectedBlocks(blocks.map(b => b.id));
                     setShowBlockDropdown(false);
                   }}>
-                  ✅ Select All
+                  Select All
                 </div>
 
                 {blocks.map(b => (
@@ -238,7 +230,7 @@ function UsersTable() {
                       setSelectedBlocks(prev =>
                         prev.includes(b.id) ? prev.filter(id => id !== b.id) : [...prev, b.id]
                       );
-                      setShowBlockDropdown(false); // 🔥 CLOSE
+                      setShowBlockDropdown(false);
                     }}>
                     {b.name}
                   </div>
@@ -265,7 +257,6 @@ function UsersTable() {
             <th>Roles</th>
             <th>Version</th>
             <th>Reporting To</th>
-            <th>Geofences</th>
           </tr>
         </thead>
 
@@ -275,13 +266,14 @@ function UsersTable() {
               <td>{user.login}</td>
               <td>{user.name}</td>
               <td>{user.phone}</td>
+
               <td style={{ color: user.activated ? "green" : "red" }}>
                 {user.activated ? "Active" : "Inactive"}
               </td>
+
               <td>{user.roles?.join(", ")}</td>
               <td>{user.version}</td>
               <td>{user.reportingTo}</td>
-              <td>{user.geofenceNames?.join(", ")}</td>
             </tr>
           ))}
         </tbody>
@@ -294,22 +286,53 @@ function UsersTable() {
         <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>Next</button>
       </div>
 
+      {/* MODAL */}
+      {selectedUser && (
+        <div style={styles.overlay}>
+          <div style={styles.modal}>
+
+            <h3>User Details</h3>
+
+            <div style={styles.modalContent}>
+              <p><b>Login:</b> {selectedUser.login}</p>
+              <p><b>Name:</b> {selectedUser.firstName} {selectedUser.lastName}</p>
+              <p><b>Phone:</b> {selectedUser.phone}</p>
+              <p><b>Status:</b> {selectedUser.activated ? "Active" : "Inactive"}</p>
+              <p><b>Roles:</b> {selectedUser.authorities?.join(", ")}</p>
+              <p><b>Version:</b> {selectedUser.applicationVersion}</p>
+              <p><b>Geofences:</b> {selectedUser.geofenceNames?.join(", ")}</p>
+            </div>
+
+            <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
+              Close
+            </button>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
 
+// STYLES
 const styles = {
-  page: { padding: "20px" },
-  topBar: { display: "flex", gap: "10px", flexWrap: "wrap" },
+  page: { padding: "20px", maxWidth: "1200px", margin: "auto" },
+  topBar: { display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "10px" },
   input: { padding: "8px" },
-  dropdown: { padding: "8px" },
+  dropdown: { padding: "8px", borderRadius: "6px", border: "1px solid #ccc" },
   dropdownWrapper: { position: "relative" },
   dropdownMenu: { position: "absolute", top: "40px", background: "white", border: "1px solid #ccc" },
   dropdownItem: { padding: "6px", cursor: "pointer" },
+  selectAll: { padding: "6px", fontWeight: "bold", color: "#2563eb" },
   downloadBtn: { background: "#2563eb", color: "white", padding: "8px" },
   table: { width: "100%" },
   row: { cursor: "pointer" },
-  pagination: { display: "flex", justifyContent: "center", gap: "10px" },
+  pagination: { display: "flex", justifyContent: "center", gap: "10px", marginTop: "10px" },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center" },
+  modal: { background: "white", padding: "20px", width: "50%" },
+  modalContent: { maxHeight: "60vh", overflowY: "auto" },
+  closeBtn: { background: "red", color: "white", padding: "8px" },
   loader: { textAlign: "center" }
 };
 
