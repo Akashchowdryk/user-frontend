@@ -34,7 +34,7 @@ function UsersTable() {
   // 🔥 LOAD USERS
   useEffect(() => {
     setLoading(true);
-    axios.get("http://localhost:9090/api/users-summary")
+    axios.get("https://user-extract.onrender.com/api/users-summary")
       .then(res => {
         setUsers(res.data);
 
@@ -49,7 +49,7 @@ function UsersTable() {
 
   // DISTRICTS
   useEffect(() => {
-    axios.get("http://localhost:9090/api/districts")
+    axios.get("https://user-extract.onrender.com/api/districts")
       .then(res => setDistricts(res.data));
   }, []);
 
@@ -58,7 +58,7 @@ function UsersTable() {
     if (!selectedDistrict) return;
 
     setBlocksLoading(true);
-    axios.get(`http://localhost:9090/api/blocks/${selectedDistrict}`)
+    axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
       .then(res => setBlocks(res.data))
       .finally(() => setBlocksLoading(false));
   }, [selectedDistrict]);
@@ -100,7 +100,7 @@ function UsersTable() {
   // USER CLICK
   const handleUserClick = (user) => {
     setGlobalLoading(true);
-    axios.get(`http://localhost:9090/api/user/${user.login}`)
+    axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data))
       .finally(() => setGlobalLoading(false));
   };
