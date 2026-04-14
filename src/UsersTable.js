@@ -35,9 +35,8 @@ function UsersTable() {
   useEffect(() => {
     setLoading(true);
 
-    const fetchUsers = async (retry = 2) => {
-      try {
-        const res = await axios.get("https://user-extract.onrender.com/api/users-summary");
+    axios.get("https://user-extract.onrender.com/api/users-summary")
+      .then(res => {
         setUsers(res.data);
 
         const roleSet = new Set();
@@ -45,17 +44,8 @@ function UsersTable() {
           u.roles?.forEach(r => roleSet.add(r));
         });
         setRoles([...roleSet]);
-
-      } catch (err) {
-        if (retry > 0) {
-          setTimeout(() => fetchUsers(retry - 1), 2000);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUsers();
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   // DISTRICTS
@@ -73,11 +63,6 @@ function UsersTable() {
       .then(res => setBlocks(res.data))
       .finally(() => setBlocksLoading(false));
   }, [selectedDistrict]);
-
-  // SCROLL
-  useEffect(() => {
-    tableRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [currentPage]);
 
   // FILTER
   const filteredUsers = users.filter(user => {
@@ -108,9 +93,15 @@ function UsersTable() {
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // USER CLICK
+  // 🔥 USER CLICK FIX (SCROLL TO TOP)
   const handleUserClick = (user) => {
     setGlobalLoading(true);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
+
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data))
       .finally(() => setGlobalLoading(false));
@@ -242,53 +233,49 @@ function UsersTable() {
       </div>
 
       {/* TABLE */}
-      <div ref={tableRef}>
-        {!loading && (
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th>Login</th>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Status</th>
-                <th>Roles</th>
-                <th>Version</th>
-                <th>Reporting To</th>
-                <th>Geofences</th>
-              </tr>
-            </thead>
+      <table style={styles.table}>
+        <thead>
+          <tr>
+            <th>Login</th>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th>Roles</th>
+            <th>Version</th>
+            <th>Reporting To</th>
+            <th>Geofences</th>
+          </tr>
+        </thead>
 
-            <tbody>
-              {currentUsers.map((user, i) => (
-                <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
+        <tbody>
+          {currentUsers.map((user, i) => (
+            <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
 
-                  <td>{user.login}</td>
-                  <td>{user.name}</td>
-                  <td>{user.phone}</td>
+              <td>{user.login}</td>
+              <td>{user.name}</td>
+              <td>{user.phone}</td>
 
-                  <td style={{ color: user.activated ? "green" : "red", fontWeight: "bold" }}>
-                    {user.activated ? "Active" : "Inactive"}
-                  </td>
+              <td style={{ color: user.activated ? "green" : "red" }}>
+                {user.activated ? "Active" : "Inactive"}
+              </td>
 
-                  <td>{user.roles?.map((r, i) => <div key={i}>{r}</div>)}</td>
-                  <td>{user.version}</td>
-                  <td>{user.reportingTo}</td>
+              <td>{user.roles?.map((r, i) => <div key={i}>{r}</div>)}</td>
+              <td>{user.version}</td>
+              <td>{user.reportingTo}</td>
 
-                  <td onClick={(e) => e.stopPropagation()}>
-                    {user.geofenceNames?.length > 2 ? (
-                      <details>
-                        <summary>{user.geofenceNames.slice(0, 2).join(", ")}</summary>
-                        {user.geofenceNames.map((g, i) => <div key={i}>{g}</div>)}
-                      </details>
-                    ) : user.geofenceNames?.join(", ")}
-                  </td>
+              <td>
+                {user.geofenceNames?.length > 2 ? (
+                  <details>
+                    <summary>{user.geofenceNames.slice(0, 2).join(", ")}</summary>
+                    {user.geofenceNames.map((g, i) => <div key={i}>{g}</div>)}
+                  </details>
+                ) : user.geofenceNames?.join(", ")}
+              </td>
 
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       {/* PAGINATION */}
       <div style={styles.pagination}>
@@ -297,7 +284,7 @@ function UsersTable() {
         <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>Next</button>
       </div>
 
-      {/* MODAL */}
+      {/* 🔥 CLEAN MODAL FIXED */}
       {selectedUser && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
@@ -361,14 +348,14 @@ function UsersTable() {
 }
 
 const styles = {
-  page: { padding: "20px", maxWidth: "1200px", margin: "auto" },
+  page: { padding: "20px" },
   topBar: { display: "flex", gap: "10px", flexWrap: "wrap" },
   input: { padding: "8px" },
-  dropdown: { padding: "8px 12px", borderRadius: "6px", border: "1px solid #ccc" },
+  dropdown: { padding: "8px" },
   dropdownWrapper: { position: "relative" },
   dropdownMenu: { position: "absolute", top: "40px", background: "white", border: "1px solid #ccc" },
   dropdownItem: { padding: "6px", cursor: "pointer" },
-  downloadBtn: { background: "#2563eb", color: "white", padding: "8px", borderRadius: "6px" },
+  downloadBtn: { background: "#2563eb", color: "white", padding: "8px" },
   table: { width: "100%" },
   row: { cursor: "pointer" },
   pagination: { display: "flex", justifyContent: "center", gap: "10px" },
@@ -377,7 +364,7 @@ const styles = {
   detailTable: { width: "100%" },
   key: { fontWeight: "bold" },
   closeBtn: { background: "#dc2626", color: "white", padding: "8px" },
-  loader: { textAlign: "center", fontWeight: "bold" }
+  loader: { textAlign: "center" }
 };
 
 export default UsersTable;
