@@ -32,7 +32,7 @@ function UsersTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
-  // Disable scroll when modal open
+  // Disable body scroll when modal open
   useEffect(() => {
     document.body.style.overflow = selectedUser ? "hidden" : "auto";
   }, [selectedUser]);
@@ -259,7 +259,7 @@ function UsersTable() {
               <td>{u.version}</td>
               <td>{u.reportingTo}</td>
 
-              <td>
+              <td onClick={(e)=>e.stopPropagation()}>
                 {u.geofenceNames?.length > 2 ? (
                   <details>
                     <summary>{u.geofenceNames.slice(0,2).join(", ")}</summary>
@@ -285,22 +285,37 @@ function UsersTable() {
         <div style={styles.overlay}>
           <div style={styles.modal}>
 
-            <h3>User Details</h3>
-
-            <div style={styles.modalContent}>
-              <table>
-                <tbody>
-                  {Object.entries(selectedUser).map(([k,v])=>(
-                    <tr key={k}>
-                      <td><b>{k}</b></td>
-                      <td>{JSON.stringify(v)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={styles.modalHeader}>
+              <h3>User Details</h3>
+              <button style={styles.closeBtnSmall} onClick={()=>setSelectedUser(null)}>✖</button>
             </div>
 
-            <button style={styles.closeBtn} onClick={()=>setSelectedUser(null)}>Close</button>
+            <div style={styles.modalContent}>
+
+              <div style={styles.detailRow}><span>Login</span><span>{selectedUser.login}</span></div>
+              <div style={styles.detailRow}><span>Name</span><span>{selectedUser.firstName} {selectedUser.lastName}</span></div>
+              <div style={styles.detailRow}><span>Phone</span><span>{selectedUser.phone}</span></div>
+
+              <div style={styles.detailRow}>
+                <span>Status</span>
+                <span style={{color:selectedUser.activated?"green":"red"}}>
+                  {selectedUser.activated ? "Active" : "Inactive"}
+                </span>
+              </div>
+
+              <div style={styles.detailRow}><span>Version</span><span>{selectedUser.applicationVersion}</span></div>
+
+              <div style={styles.detailRow}>
+                <span>Roles</span>
+                <span>{selectedUser.authorities?.map((r,i)=><div key={i}>{r}</div>)}</span>
+              </div>
+
+              <div style={styles.detailRow}>
+                <span>Geofences</span>
+                <span>{selectedUser.geofenceNames?.map((g,i)=><div key={i}>{g}</div>)}</span>
+              </div>
+
+            </div>
 
           </div>
         </div>
@@ -326,8 +341,10 @@ const styles = {
   pagination:{display:"flex",justifyContent:"center",gap:"10px"},
   overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",justifyContent:"center",alignItems:"center"},
   modal:{background:"white",padding:"20px",width:"60%",maxHeight:"80vh",display:"flex",flexDirection:"column"},
+  modalHeader:{display:"flex",justifyContent:"space-between",alignItems:"center"},
   modalContent:{overflowY:"auto"},
-  closeBtn:{background:"red",color:"white"},
+  closeBtnSmall:{background:"red",color:"white",padding:"4px 8px",fontSize:"12px"},
+  detailRow:{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #eee"},
   loader:{textAlign:"center"}
 };
 
