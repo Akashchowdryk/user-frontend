@@ -150,7 +150,6 @@ function UsersTable() {
         {/* BLOCK DROPDOWN */}
         {selectedDistrict && (
           <div style={styles.dropdownWrapper}>
-
             <button
               onClick={() => setShowBlockDropdown(!showBlockDropdown)}
               style={styles.dropdown}
@@ -242,30 +241,103 @@ function UsersTable() {
         )}
       </div>
 
-      {/* PAGINATION */}
+      {/* PAGINATION CENTERED */}
       {!loading && (
         <div style={styles.pagination}>
-          <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}>Prev</button>
-          <span>{currentPage} / {totalPages}</span>
-          <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>Next</button>
+          <button style={styles.pageBtn} onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}>
+            Prev
+          </button>
+
+          <span style={styles.pageText}>
+            {currentPage} / {totalPages}
+          </span>
+
+          <button style={styles.pageBtn} onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>
+            Next
+          </button>
         </div>
       )}
 
-      {/* MODAL */}
+      {/* CLEAN MODAL */}
       {selectedUser && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
-
             <h2>User Details</h2>
 
             <div style={styles.scrollBox}>
-              <pre>{JSON.stringify(selectedUser, null, 2)}</pre>
+              <table style={styles.detailTable}>
+                <tbody>
+
+                  {Object.entries(selectedUser).map(([key, value]) => {
+
+                    const hidden = [
+                      "geofences","groups","vendors",
+                      "trakeyeType","trakeyeTypeAttribute",
+                      "trakeyeTypeAttributeValues","vendor"
+                    ];
+
+                    if (hidden.includes(key)) return null;
+
+                    if (key === "activated") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Status</td>
+                          <td style={{ color: value ? "green" : "red" }}>
+                            {value ? "Active" : "Inactive"}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    if (key === "authorities") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Roles</td>
+                          <td>{value?.map((r, i) => <div key={i}>{r}</div>)}</td>
+                        </tr>
+                      );
+                    }
+
+                    if (key === "ownedBy") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Reporting To</td>
+                          <td>{value?.map(v => v.login).join(", ")}</td>
+                        </tr>
+                      );
+                    }
+
+                    if (key === "geofenceNames") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Geofences</td>
+                          <td>
+                            {value?.length > 2 ? (
+                              <details>
+                                <summary>{value.slice(0, 2).join(", ")}</summary>
+                                {value.map((g, i) => <div key={i}>{g}</div>)}
+                              </details>
+                            ) : value?.join(", ")}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <tr key={key}>
+                        <td style={styles.key}>{key}</td>
+                        <td>{Array.isArray(value) ? value.join(", ") : value?.toString()}</td>
+                      </tr>
+                    );
+                  })}
+
+                </tbody>
+              </table>
             </div>
 
             <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
               Close
             </button>
-
           </div>
         </div>
       )}
@@ -300,12 +372,7 @@ const styles = {
     border: "1px solid #ccc"
   },
 
-  dropdownItem: {
-    padding: "6px",
-    display: "flex",
-    gap: "8px",
-    cursor: "pointer"
-  },
+  dropdownItem: { padding: "6px", display: "flex", gap: "8px", cursor: "pointer" },
 
   downloadBtn: {
     background: "#2563eb",
@@ -319,7 +386,24 @@ const styles = {
   table: { width: "100%" },
   row: { cursor: "pointer" },
 
-  pagination: { marginTop: "10px" },
+  pagination: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "15px",
+    marginTop: "20px"
+  },
+
+  pageBtn: {
+    padding: "8px 14px",
+    borderRadius: "6px",
+    border: "1px solid #ccc",
+    background: "#f9fafb",
+    cursor: "pointer",
+    fontWeight: "bold"
+  },
+
+  pageText: { fontWeight: "bold" },
 
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)" },
 
@@ -332,6 +416,10 @@ const styles = {
   },
 
   scrollBox: { maxHeight: "400px", overflowY: "auto" },
+
+  detailTable: { width: "100%" },
+
+  key: { fontWeight: "bold", width: "40%" },
 
   closeBtn: {
     background: "#dc2626",
