@@ -12,7 +12,6 @@ function UsersTable() {
   const [selectedReportingTo, setSelectedReportingTo] = useState("");
 
   const [loading, setLoading] = useState(true);
-  const [globalLoading, setGlobalLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   const [districts, setDistricts] = useState([]);
@@ -32,18 +31,12 @@ function UsersTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
-  // Disable scroll when modal open
-  useEffect(() => {
-    document.body.style.overflow = selectedUser ? "hidden" : "auto";
-  }, [selectedUser]);
-
   // USERS
   useEffect(() => {
     setLoading(true);
 
     axios.get("https://user-extract.onrender.com/api/users-summary")
       .then(res => {
-        console.log("USERS:", res.data); // DEBUG
         setUsers(res.data);
 
         const roleSet = new Set();
@@ -74,63 +67,40 @@ function UsersTable() {
       .then(res => setBlocks(res.data));
   }, [selectedDistrict]);
 
-  // RESET PAGE WHEN FILTER CHANGES
+  // RESET PAGE
   useEffect(() => {
     setCurrentPage(1);
   }, [search, selectedReportingTo, selectedRoles, selectedBlocks]);
 
-  // ✅ SAFE FILTER
-  const filteredUsers = users.filter(user => {
-
-    const matchSearch =
-      user.login?.toLowerCase().includes(search.toLowerCase());
-
-    const matchReporting =
-      !selectedReportingTo || user.reportingTo === selectedReportingTo;
-
-    const matchRoles =
-      selectedRoles.length === 0 ||
-      selectedRoles.some(r => user.roles?.includes(r));
-
-    const matchBlocks =
-      selectedBlocks.length === 0 ||
+  // FILTER
+  const filteredUsers = users.filter(user =>
+    user.login?.toLowerCase().includes(search.toLowerCase()) &&
+    (!selectedReportingTo || user.reportingTo === selectedReportingTo) &&
+    (selectedRoles.length === 0 || selectedRoles.some(r => user.roles?.includes(r))) &&
+    (selectedBlocks.length === 0 ||
       selectedBlocks.some(id => {
         const block = blocks.find(b => b.id === id);
         return block && user.geofenceNames?.includes(block.name);
-      });
+      }))
+  );
 
-    return matchSearch && matchReporting && matchRoles && matchBlocks;
-  });
-
-  const currentUsers = filteredUsers.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  const currentUsers = filteredUsers.slice(
+    (currentPage - 1) * usersPerPage,
+    currentPage * usersPerPage
+  );
 
   // USER CLICK
   const handleUserClick = (user) => {
-    setGlobalLoading(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
-      .then(res => setSelectedUser(res.data))
-      .finally(() => setGlobalLoading(false));
+      .then(res => setSelectedUser(res.data));
   };
 
   // DOWNLOAD
   const downloadAll = () => {
     setDownloading(true);
 
-    const data = users.map(u => ({
-      Login: u.login,
-      Name: u.name,
-      Phone: u.phone,
-      Status: u.activated ? "Active" : "Inactive",
-      ReportingTo: u.reportingTo,
-      Roles: u.roles?.join(", "),
-      Version: u.version,
-      Geofences: u.geofenceNames?.join(", ")
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(data);
+    const ws = XLSX.utils.json_to_sheet(users);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Users");
 
@@ -145,54 +115,48 @@ function UsersTable() {
 
       <h2>User Dashboard</h2>
 
-      {(loading || globalLoading) && <div style={styles.loader}>⏳ Loading...</div>}
+      {loading && <div>Loading...</div>}
 
       {/* FILTERS */}
-      <div style={styles.topBar}>
+      <div style={styles.filters}>
 
-        <input placeholder="Search..." value={search}
-          onChange={(e) => setSearch(e.target.value)} style={styles.input} />
+        <input
+          placeholder="Search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
 
-        <select value={selectedReportingTo}
-          onChange={(e) => setSelectedReportingTo(e.target.value)}
-          style={styles.dropdown}>
+        <select onChange={(e)=>setSelectedReportingTo(e.target.value)}>
           <option value="">All Reporting</option>
-          {reportingList.map(r => <option key={r}>{r}</option>)}
+          {reportingList.map(r=><option key={r}>{r}</option>)}
         </select>
 
-        <select value={selectedDistrict}
-          onChange={(e) => {
-            setSelectedDistrict(e.target.value);
-            setSelectedBlocks([]);
-            setSelectedRoles([]);
-          }}
-          style={styles.dropdown}>
-          <option value="">All Districts</option>
-          {districts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        <select onChange={(e)=>setSelectedDistrict(e.target.value)}>
+          <option value="">District</option>
+          {districts.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
 
         {/* ROLES */}
         {selectedDistrict && (
-          <div style={styles.dropdownWrapper}>
-            <button style={styles.dropdown} onClick={() => setShowRoleDropdown(!showRoleDropdown)}>
-              Roles ({selectedRoles.length})
-            </button>
+          <div>
+            <button onClick={()=>setShowRoleDropdown(!showRoleDropdown)}>Roles</button>
 
             {showRoleDropdown && (
-              <div style={styles.dropdownMenu}>
-                {roles.map(r => (
+              <div style={styles.dropdown}>
+                {roles.map(r=>(
                   <label key={r}>
                     <input type="checkbox"
                       checked={selectedRoles.includes(r)}
                       onChange={() =>
                         setSelectedRoles(prev =>
-                          prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]
+                          prev.includes(r) ? prev.filter(x=>x!==r) : [...prev,r]
                         )
                       }
-                    /> {r}
+                    />
+                    {r}
                   </label>
                 ))}
-                <button style={styles.doneBtn} onClick={() => setShowRoleDropdown(false)}>Done</button>
+                <button onClick={()=>setShowRoleDropdown(false)}>Done</button>
               </div>
             )}
           </div>
@@ -200,47 +164,45 @@ function UsersTable() {
 
         {/* BLOCKS */}
         {selectedDistrict && (
-          <div style={styles.dropdownWrapper}>
-            <button style={styles.dropdown} onClick={() => setShowBlockDropdown(!showBlockDropdown)}>
-              Blocks ({selectedBlocks.length})
-            </button>
+          <div>
+            <button onClick={()=>setShowBlockDropdown(!showBlockDropdown)}>Blocks</button>
 
             {showBlockDropdown && (
-              <div style={styles.dropdownMenu}>
-                <div style={styles.selectAll}
-                  onClick={() => setSelectedBlocks(blocks.map(b => b.id))}>
+              <div style={styles.dropdown}>
+                <div onClick={()=>setSelectedBlocks(blocks.map(b=>b.id))}>
                   Select All
                 </div>
 
-                {blocks.map(b => (
+                {blocks.map(b=>(
                   <label key={b.id}>
                     <input type="checkbox"
                       checked={selectedBlocks.includes(b.id)}
                       onChange={() =>
                         setSelectedBlocks(prev =>
                           prev.includes(b.id)
-                            ? prev.filter(id => id !== b.id)
-                            : [...prev, b.id]
+                            ? prev.filter(id=>id!==b.id)
+                            : [...prev,b.id]
                         )
                       }
-                    /> {b.name}
+                    />
+                    {b.name}
                   </label>
                 ))}
 
-                <button style={styles.doneBtn} onClick={() => setShowBlockDropdown(false)}>Done</button>
+                <button onClick={()=>setShowBlockDropdown(false)}>Done</button>
               </div>
             )}
           </div>
         )}
 
-        <button onClick={downloadAll} style={styles.downloadBtn}>
-          {downloading ? "Downloading..." : "Download All"}
+        <button onClick={downloadAll}>
+          {downloading ? "Downloading..." : "Download"}
         </button>
 
       </div>
 
       {/* TABLE */}
-      <table style={styles.table}>
+      <table border="1" width="100%">
         <thead>
           <tr>
             <th>Login</th>
@@ -249,21 +211,21 @@ function UsersTable() {
             <th>Status</th>
             <th>Roles</th>
             <th>Version</th>
-            <th>Reporting To</th>
+            <th>Reporting</th>
             <th>Geofences</th>
           </tr>
         </thead>
 
         <tbody>
-          {currentUsers.map((u, i) => (
-            <tr key={i} style={styles.row} onClick={() => handleUserClick(u)}>
+          {currentUsers.map((u,i)=>(
+            <tr key={i} onClick={()=>handleUserClick(u)}>
 
               <td>{u.login}</td>
               <td>{u.name}</td>
               <td>{u.phone}</td>
 
-              <td style={{ color: u.activated ? "green" : "red" }}>
-                {u.activated ? "Active" : "Inactive"}
+              <td style={{color:u.activated?"green":"red"}}>
+                {u.activated?"Active":"Inactive"}
               </td>
 
               <td>{u.roles?.map((r,i)=><div key={i}>{r}</div>)}</td>
@@ -272,7 +234,7 @@ function UsersTable() {
               <td>{u.reportingTo}</td>
 
               <td onClick={(e)=>e.stopPropagation()}>
-                {u.geofenceNames?.length > 2 ? (
+                {u.geofenceNames?.length>2 ? (
                   <details>
                     <summary>{u.geofenceNames.slice(0,2).join(", ")}</summary>
                     {u.geofenceNames.map((g,i)=><div key={i}>{g}</div>)}
@@ -285,23 +247,39 @@ function UsersTable() {
         </tbody>
       </table>
 
+      {/* PAGINATION */}
+      <div style={styles.pagination}>
+        <button onClick={()=>setCurrentPage(p=>Math.max(p-1,1))}>Prev</button>
+        <span>{currentPage}/{totalPages}</span>
+        <button onClick={()=>setCurrentPage(p=>Math.min(p+1,totalPages))}>Next</button>
+      </div>
+
+      {/* MODAL */}
+      {selectedUser && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modal}>
+            <h3>User Details</h3>
+
+            <p><b>Login:</b> {selectedUser.login}</p>
+            <p><b>Name:</b> {selectedUser.firstName} {selectedUser.lastName}</p>
+            <p><b>Phone:</b> {selectedUser.phone}</p>
+
+            <button onClick={()=>setSelectedUser(null)}>Close</button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
 
 const styles = {
   page:{padding:"20px"},
-  topBar:{display:"flex",gap:"10px",flexWrap:"wrap"},
-  input:{padding:"8px"},
-  dropdown:{padding:"8px"},
-  dropdownWrapper:{position:"relative"},
-  dropdownMenu:{position:"absolute",top:"40px",background:"white",border:"1px solid #ccc",padding:"10px",maxHeight:"250px",overflowY:"auto"},
-  selectAll:{fontWeight:"bold",color:"blue"},
-  doneBtn:{marginTop:"5px",background:"green",color:"white"},
-  downloadBtn:{background:"#2563eb",color:"white",padding:"8px"},
-  table:{width:"100%",marginTop:"10px"},
-  row:{cursor:"pointer"},
-  loader:{textAlign:"center"}
+  filters:{display:"flex",gap:"10px",flexWrap:"wrap"},
+  dropdown:{border:"1px solid #ccc",padding:"10px"},
+  pagination:{marginTop:"10px",textAlign:"center"},
+  modalOverlay:{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)"},
+  modal:{background:"white",padding:"20px",margin:"100px auto",width:"50%"}
 };
 
 export default UsersTable;
