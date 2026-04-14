@@ -122,6 +122,7 @@ function UsersTable() {
 
         <input
           placeholder="Search"
+          style={styles.input}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -139,7 +140,7 @@ function UsersTable() {
         {/* ROLES */}
         {selectedDistrict && (
           <div>
-            <button onClick={()=>setShowRoleDropdown(!showRoleDropdown)}>Roles</button>
+            <button style={styles.dropdownBtn} onClick={()=>setShowRoleDropdown(!showRoleDropdown)}>Roles</button>
 
             {showRoleDropdown && (
               <div style={styles.dropdown}>
@@ -165,7 +166,7 @@ function UsersTable() {
         {/* BLOCKS */}
         {selectedDistrict && (
           <div>
-            <button onClick={()=>setShowBlockDropdown(!showBlockDropdown)}>Blocks</button>
+            <button style={styles.dropdownBtn} onClick={()=>setShowBlockDropdown(!showBlockDropdown)}>Blocks</button>
 
             {showBlockDropdown && (
               <div style={styles.dropdown}>
@@ -189,7 +190,7 @@ function UsersTable() {
                   </label>
                 ))}
 
-                <button onClick={()=>setShowBlockDropdown(false)}>Done</button>
+                <button style={styles.dropdownBtn} onClick={()=>setShowBlockDropdown(false)}>Done</button>
               </div>
             )}
           </div>
@@ -202,36 +203,36 @@ function UsersTable() {
       </div>
 
       {/* TABLE */}
-      <table border="1" width="100%">
+      <table style={styles.table} border="1" width="100%">
         <thead>
-          <tr>
-            <th>Login</th>
-            <th>Name</th>
-            <th>Phone</th>
-            <th>Status</th>
-            <th>Roles</th>
-            <th>Version</th>
-            <th>Reporting</th>
-            <th>Geofences</th>
+          <tr style={styles.row}>
+            <th style={styles.th}>Login</th>
+            <th style={styles.th}>Name</th>
+            <th style={styles.th}>Phone</th>
+            <th style={styles.th}>Status</th>
+            <th style={styles.th}>Roles</th>
+            <th style={styles.th}>Version</th>
+            <th style={styles.th}>Reporting</th>
+            <th style={styles.th}>Geofences</th>
           </tr>
         </thead>
 
         <tbody>
           {currentUsers.map((u,i)=>(
-            <tr key={i} onClick={()=>handleUserClick(u)}>
+            <tr style={styles.row}key={i} onClick={()=>handleUserClick(u)}>
 
-              <td>{u.login}</td>
-              <td>{u.name}</td>
-              <td>{u.phone}</td>
+              <td style={styles.td}>{u.login}</td>
+              <td style={styles.td}>{u.name}</td>
+              <td style={styles.td}>{u.phone}</td>
 
               <td style={{color:u.activated?"green":"red"}}>
                 {u.activated?"Active":"Inactive"}
               </td>
 
-              <td>{u.roles?.map((r,i)=><div key={i}>{r}</div>)}</td>
+              <td style={styles.td}>{u.roles?.map((r,i)=><div key={i}>{r}</div>)}</td>
 
-              <td>{u.version}</td>
-              <td>{u.reportingTo}</td>
+              <td style={styles.td}>{u.version}</td>
+              <td style={styles.td}>{u.reportingTo}</td>
 
               <td onClick={(e)=>e.stopPropagation()}>
                 {u.geofenceNames?.length>2 ? (
@@ -249,9 +250,9 @@ function UsersTable() {
 
       {/* PAGINATION */}
       <div style={styles.pagination}>
-        <button onClick={()=>setCurrentPage(p=>Math.max(p-1,1))}>Prev</button>
+        <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.max(p-1,1))}>Prev</button>
         <span>{currentPage}/{totalPages}</span>
-        <button onClick={()=>setCurrentPage(p=>Math.min(p+1,totalPages))}>Next</button>
+        <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.min(p+1,totalPages))}>Next</button>
       </div>
 
       {/* MODAL */}
@@ -260,11 +261,77 @@ function UsersTable() {
           <div style={styles.modal}>
             <h3>User Details</h3>
 
-            <p><b>Login:</b> {selectedUser.login}</p>
-            <p><b>Name:</b> {selectedUser.firstName} {selectedUser.lastName}</p>
-            <p><b>Phone:</b> {selectedUser.phone}</p>
+           <div style={styles.scrollBox}>
+              <table style={styles.detailTable}>
+                <tbody>
 
-            <button onClick={()=>setSelectedUser(null)}>Close</button>
+                  {Object.entries(selectedUser).map(([key, value]) => {
+
+                    const hidden = [
+                      "geofences","groups","vendors",
+                      "trakeyeType","trakeyeTypeAttribute",
+                      "trakeyeTypeAttributeValues","vendor"
+                    ];
+
+                    if (hidden.includes(key)) return null;
+
+                    if (key === "activated") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Status</td>
+                          <td style={{ color: value ? "green" : "red" }}>
+                            {value ? "Active" : "Inactive"}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    if (key === "authorities") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Roles</td>
+                          <td>{value?.map((r, i) => <div key={i}>{r}</div>)}</td>
+                        </tr>
+                      );
+                    }
+
+                    if (key === "ownedBy") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Reporting To</td>
+                          <td>{value?.map(v => v.login).join(", ")}</td>
+                        </tr>
+                      );
+                    }
+
+                    if (key === "geofenceNames") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Geofences</td>
+                          <td>
+                            {value?.length > 2 ? (
+                              <details>
+                                <summary>{value.slice(0, 2).join(", ")}</summary>
+                                {value.map((g, i) => <div key={i}>{g}</div>)}
+                              </details>
+                            ) : value?.join(", ")}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <tr key={key}>
+                        <td style={styles.key}>{key}</td>
+                        <td>{Array.isArray(value) ? value.join(", ") : value?.toString()}</td>
+                      </tr>
+                    );
+                  })}
+
+                </tbody>
+              </table>
+            </div>
+            <button style={styles.closeBtn} onClick={()=>setSelectedUser(null)}>Close</button>
           </div>
         </div>
       )}
@@ -274,12 +341,154 @@ function UsersTable() {
 }
 
 const styles = {
-  page:{padding:"20px"},
-  filters:{display:"flex",gap:"10px",flexWrap:"wrap"},
-  dropdown:{border:"1px solid #ccc",padding:"10px"},
-  pagination:{marginTop:"10px",textAlign:"center"},
-  modalOverlay:{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)"},
-  modal:{background:"white",padding:"20px",margin:"100px auto",width:"50%"}
+
+  page: {
+    padding: "20px",
+    fontFamily: "Arial"
+  },
+
+  filters: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+    marginBottom: "15px"
+  },
+
+  input: {
+    padding: "8px",
+    borderRadius: "6px",
+    border: "1px solid #ccc"
+  },
+
+  dropdownBtn: {
+    padding: "8px 12px",
+    borderRadius: "6px",
+    border: "1px solid #ccc",
+    background: "#fff",
+    cursor: "pointer"
+  },
+
+  dropdownMenu: {
+    position: "absolute",
+    top: "40px",
+    background: "#fff",
+    border: "1px solid #ccc",
+    borderRadius: "6px",
+    padding: "10px",
+    width: "200px",
+    maxHeight: "250px",
+    overflowY: "auto",
+    zIndex: 10,
+    boxShadow: "0 2px 6px rgba(0,0,0,0.2)"
+  },
+
+  table: {
+    width: "100%",
+    borderCollapse: "collapse"
+  },
+
+  th: {
+    border: "1px solid #ddd",
+    padding: "10px",
+    background: "#f5f5f5",
+    textAlign: "left"
+  },
+
+  td: {
+    border: "1px solid #ddd",
+    padding: "10px"
+  },
+
+  row: {
+    cursor: "pointer"
+  },
+
+  rowHover: {
+    backgroundColor: "#f9f9f9"
+  },
+
+  downloadBtn: {
+    background: "#2563eb",
+    color: "white",
+    padding: "8px 14px",
+    borderRadius: "6px",
+    border: "none",
+    cursor: "pointer"
+  },
+
+  pagination: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "10px",
+    marginTop: "15px"
+  },
+
+  pageBtn: {
+    padding: "6px 12px",
+    borderRadius: "5px",
+    border: "1px solid #ccc",
+    cursor: "pointer"
+  },
+
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.6)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center"
+  },
+
+  modal: {
+    background: "white",
+    padding: "20px",
+    borderRadius: "10px",
+    width: "500px",
+    maxHeight: "80vh",
+    overflowY: "auto",
+    boxShadow: "0 4px 10px rgba(0,0,0,0.3)"
+  },
+
+  modalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "10px"
+  },
+
+  closeBtn: {
+    background: "red",
+    color: "white",
+    border: "none",
+    padding: "4px 8px",
+    fontSize: "12px",
+    borderRadius: "4px",
+    cursor: "pointer"
+  },
+
+  detailRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    padding: "8px 0",
+    borderBottom: "1px solid #eee"
+  },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)" },
+
+  modal: {
+    background: "white",
+    padding: "20px",
+    width: "600px",
+    margin: "50px auto",
+    borderRadius: "10px"
+  },
+
+  scrollBox: { maxHeight: "400px", overflowY: "auto" },
+
+  detailTable: { width: "100%" },
+
+  key: { fontWeight: "bold", width: "40%" }
+
 };
 
 export default UsersTable;
