@@ -32,7 +32,7 @@ function UsersTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
-  // Disable body scroll when modal open
+  // Disable scroll when modal open
   useEffect(() => {
     document.body.style.overflow = selectedUser ? "hidden" : "auto";
   }, [selectedUser]);
@@ -43,6 +43,7 @@ function UsersTable() {
 
     axios.get("https://user-extract.onrender.com/api/users-summary")
       .then(res => {
+        console.log("USERS:", res.data); // DEBUG
         setUsers(res.data);
 
         const roleSet = new Set();
@@ -73,16 +74,33 @@ function UsersTable() {
       .then(res => setBlocks(res.data));
   }, [selectedDistrict]);
 
-  // FILTER
-  const filteredUsers = users.filter(user =>
-    user.login?.toLowerCase().includes(search.toLowerCase()) &&
-    (!selectedReportingTo || user.reportingTo === selectedReportingTo) &&
-    (selectedRoles.length === 0 || selectedRoles.some(r => user.roles?.includes(r))) &&
-    (selectedBlocks.length === 0 ||
-      selectedBlocks.some(id =>
-        user.geofenceNames?.includes(blocks.find(b => b.id === id)?.name)
-      ))
-  );
+  // RESET PAGE WHEN FILTER CHANGES
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedReportingTo, selectedRoles, selectedBlocks]);
+
+  // ✅ SAFE FILTER
+  const filteredUsers = users.filter(user => {
+
+    const matchSearch =
+      user.login?.toLowerCase().includes(search.toLowerCase());
+
+    const matchReporting =
+      !selectedReportingTo || user.reportingTo === selectedReportingTo;
+
+    const matchRoles =
+      selectedRoles.length === 0 ||
+      selectedRoles.some(r => user.roles?.includes(r));
+
+    const matchBlocks =
+      selectedBlocks.length === 0 ||
+      selectedBlocks.some(id => {
+        const block = blocks.find(b => b.id === id);
+        return block && user.geofenceNames?.includes(block.name);
+      });
+
+    return matchSearch && matchReporting && matchRoles && matchBlocks;
+  });
 
   const currentUsers = filteredUsers.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
@@ -129,15 +147,11 @@ function UsersTable() {
 
       {(loading || globalLoading) && <div style={styles.loader}>⏳ Loading...</div>}
 
-      {/* FILTER BAR */}
+      {/* FILTERS */}
       <div style={styles.topBar}>
 
-        <input
-          placeholder="Search..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={styles.input}
-        />
+        <input placeholder="Search..." value={search}
+          onChange={(e) => setSearch(e.target.value)} style={styles.input} />
 
         <select value={selectedReportingTo}
           onChange={(e) => setSelectedReportingTo(e.target.value)}
@@ -167,7 +181,7 @@ function UsersTable() {
             {showRoleDropdown && (
               <div style={styles.dropdownMenu}>
                 {roles.map(r => (
-                  <label key={r} style={styles.dropdownItem}>
+                  <label key={r}>
                     <input type="checkbox"
                       checked={selectedRoles.includes(r)}
                       onChange={() =>
@@ -175,8 +189,7 @@ function UsersTable() {
                           prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]
                         )
                       }
-                    />
-                    {r}
+                    /> {r}
                   </label>
                 ))}
                 <button style={styles.doneBtn} onClick={() => setShowRoleDropdown(false)}>Done</button>
@@ -200,7 +213,7 @@ function UsersTable() {
                 </div>
 
                 {blocks.map(b => (
-                  <label key={b.id} style={styles.dropdownItem}>
+                  <label key={b.id}>
                     <input type="checkbox"
                       checked={selectedBlocks.includes(b.id)}
                       onChange={() =>
@@ -210,8 +223,7 @@ function UsersTable() {
                             : [...prev, b.id]
                         )
                       }
-                    />
-                    {b.name}
+                    /> {b.name}
                   </label>
                 ))}
 
@@ -273,54 +285,6 @@ function UsersTable() {
         </tbody>
       </table>
 
-      {/* PAGINATION */}
-      <div style={styles.pagination}>
-        <button onClick={() => setCurrentPage(p => Math.max(p-1,1))}>Prev</button>
-        <span>{currentPage} / {totalPages}</span>
-        <button onClick={() => setCurrentPage(p => Math.min(p+1,totalPages))}>Next</button>
-      </div>
-
-      {/* MODAL */}
-      {selectedUser && (
-        <div style={styles.overlay}>
-          <div style={styles.modal}>
-
-            <div style={styles.modalHeader}>
-              <h3>User Details</h3>
-              <button style={styles.closeBtnSmall} onClick={()=>setSelectedUser(null)}>✖</button>
-            </div>
-
-            <div style={styles.modalContent}>
-
-              <div style={styles.detailRow}><span>Login</span><span>{selectedUser.login}</span></div>
-              <div style={styles.detailRow}><span>Name</span><span>{selectedUser.firstName} {selectedUser.lastName}</span></div>
-              <div style={styles.detailRow}><span>Phone</span><span>{selectedUser.phone}</span></div>
-
-              <div style={styles.detailRow}>
-                <span>Status</span>
-                <span style={{color:selectedUser.activated?"green":"red"}}>
-                  {selectedUser.activated ? "Active" : "Inactive"}
-                </span>
-              </div>
-
-              <div style={styles.detailRow}><span>Version</span><span>{selectedUser.applicationVersion}</span></div>
-
-              <div style={styles.detailRow}>
-                <span>Roles</span>
-                <span>{selectedUser.authorities?.map((r,i)=><div key={i}>{r}</div>)}</span>
-              </div>
-
-              <div style={styles.detailRow}>
-                <span>Geofences</span>
-                <span>{selectedUser.geofenceNames?.map((g,i)=><div key={i}>{g}</div>)}</span>
-              </div>
-
-            </div>
-
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }
@@ -332,19 +296,11 @@ const styles = {
   dropdown:{padding:"8px"},
   dropdownWrapper:{position:"relative"},
   dropdownMenu:{position:"absolute",top:"40px",background:"white",border:"1px solid #ccc",padding:"10px",maxHeight:"250px",overflowY:"auto"},
-  dropdownItem:{display:"flex",gap:"5px"},
   selectAll:{fontWeight:"bold",color:"blue"},
   doneBtn:{marginTop:"5px",background:"green",color:"white"},
   downloadBtn:{background:"#2563eb",color:"white",padding:"8px"},
   table:{width:"100%",marginTop:"10px"},
   row:{cursor:"pointer"},
-  pagination:{display:"flex",justifyContent:"center",gap:"10px"},
-  overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",justifyContent:"center",alignItems:"center"},
-  modal:{background:"white",padding:"20px",width:"60%",maxHeight:"80vh",display:"flex",flexDirection:"column"},
-  modalHeader:{display:"flex",justifyContent:"space-between",alignItems:"center"},
-  modalContent:{overflowY:"auto"},
-  closeBtnSmall:{background:"red",color:"white",padding:"4px 8px",fontSize:"12px"},
-  detailRow:{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #eee"},
   loader:{textAlign:"center"}
 };
 
