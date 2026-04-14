@@ -137,31 +137,53 @@ function UsersTable() {
           {districts.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
 
-        {/* ROLES */}
-        {selectedDistrict && (
-          <div>
-            <button style={styles.dropdownBtn} onClick={()=>setShowRoleDropdown(!showRoleDropdown)}>Roles</button>
+       {/* ROLES */}
+{selectedDistrict && (
+  <div style={styles.dropdownWrapper}>
 
-            {showRoleDropdown && (
-              <div style={styles.dropdown}>
-                {roles.map(r=>(
-                  <label key={r}>
-                    <input type="checkbox"
-                      checked={selectedRoles.includes(r)}
-                      onChange={() =>
-                        setSelectedRoles(prev =>
-                          prev.includes(r) ? prev.filter(x=>x!==r) : [...prev,r]
-                        )
-                      }
-                    />
-                    {r}
-                  </label>
-                ))}
-                <button onClick={()=>setShowRoleDropdown(false)}>Done</button>
-              </div>
-            )}
-          </div>
-        )}
+    <button
+      style={styles.dropdownBtn}
+      onClick={() => setShowRoleDropdown(!showRoleDropdown)}
+    >
+      Roles ({selectedRoles.length})
+    </button>
+
+    {showRoleDropdown && (
+      <div style={styles.dropdownMenu}>
+
+        <div style={styles.dropdownTitle}>Select Roles</div>
+
+        <div style={styles.dropdownList}>
+          {roles.map(r => (
+            <label key={r} style={styles.dropdownItem}>
+              <input
+                type="checkbox"
+                checked={selectedRoles.includes(r)}
+                onChange={() =>
+                  setSelectedRoles(prev =>
+                    prev.includes(r)
+                      ? prev.filter(x => x !== r)
+                      : [...prev, r]
+                  )
+                }
+              />
+              <span>{r}</span>
+            </label>
+          ))}
+        </div>
+
+        <button
+          style={styles.closeDropdownBtn}
+          onClick={() => setShowRoleDropdown(false)}
+        >
+          Close ✖
+        </button>
+
+      </div>
+    )}
+
+  </div>
+)}
 
         {/* BLOCKS */}
         {selectedDistrict && (
@@ -487,7 +509,54 @@ const styles = {
 
   detailTable: { width: "100%" },
 
-  key: { fontWeight: "bold", width: "40%" }
+  key: { fontWeight: "bold", width: "40%" },
+  dropdownWrapper: {
+  position: "relative"
+},
+
+dropdownMenu: {
+  position: "absolute",
+  top: "45px",
+  left: "0",
+  width: "220px",
+  background: "#fff",
+  border: "1px solid #ccc",
+  borderRadius: "8px",
+  boxShadow: "0 4px 10px rgba(0,0,0,0.15)",
+  zIndex: 100,
+  display: "flex",
+  flexDirection: "column"
+},
+
+dropdownTitle: {
+  padding: "8px 10px",
+  fontWeight: "bold",
+  borderBottom: "1px solid #eee"
+},
+
+dropdownList: {
+  maxHeight: "200px",
+  overflowY: "auto",
+  padding: "8px"
+},
+
+dropdownItem: {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  padding: "5px 0",
+  cursor: "pointer"
+},
+
+closeDropdownBtn: {
+  margin: "8px",
+  padding: "6px",
+  background: "#2563eb",
+  color: "white",
+  border: "none",
+  borderRadius: "5px",
+  cursor: "pointer"
+}
 
 };
 
