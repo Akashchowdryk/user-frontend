@@ -32,7 +32,7 @@ function UsersTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
-  // 🔥 DISABLE BODY SCROLL WHEN MODAL OPEN
+  // Disable scroll when modal open
   useEffect(() => {
     document.body.style.overflow = selectedUser ? "hidden" : "auto";
   }, [selectedUser]);
@@ -90,7 +90,6 @@ function UsersTable() {
   // USER CLICK
   const handleUserClick = (user) => {
     setGlobalLoading(true);
-
     window.scrollTo({ top: 0, behavior: "smooth" });
 
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
@@ -130,11 +129,15 @@ function UsersTable() {
 
       {(loading || globalLoading) && <div style={styles.loader}>⏳ Loading...</div>}
 
-      {/* FILTERS */}
+      {/* FILTER BAR */}
       <div style={styles.topBar}>
 
-        <input placeholder="Search..." value={search}
-          onChange={(e) => setSearch(e.target.value)} style={styles.input} />
+        <input
+          placeholder="Search..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={styles.input}
+        />
 
         <select value={selectedReportingTo}
           onChange={(e) => setSelectedReportingTo(e.target.value)}
@@ -163,8 +166,6 @@ function UsersTable() {
 
             {showRoleDropdown && (
               <div style={styles.dropdownMenu}>
-                <div style={styles.dropdownTitle}>Roles</div>
-
                 {roles.map(r => (
                   <label key={r} style={styles.dropdownItem}>
                     <input type="checkbox"
@@ -178,7 +179,6 @@ function UsersTable() {
                     {r}
                   </label>
                 ))}
-
                 <button style={styles.doneBtn} onClick={() => setShowRoleDropdown(false)}>Done</button>
               </div>
             )}
@@ -194,8 +194,6 @@ function UsersTable() {
 
             {showBlockDropdown && (
               <div style={styles.dropdownMenu}>
-                <div style={styles.dropdownTitle}>Blocks</div>
-
                 <div style={styles.selectAll}
                   onClick={() => setSelectedBlocks(blocks.map(b => b.id))}>
                   Select All
@@ -231,15 +229,56 @@ function UsersTable() {
 
       {/* TABLE */}
       <table style={styles.table}>
+        <thead>
+          <tr>
+            <th>Login</th>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th>Roles</th>
+            <th>Version</th>
+            <th>Reporting To</th>
+            <th>Geofences</th>
+          </tr>
+        </thead>
+
         <tbody>
-          {currentUsers.map((u,i)=>(
-            <tr key={i} onClick={()=>handleUserClick(u)}>
+          {currentUsers.map((u, i) => (
+            <tr key={i} style={styles.row} onClick={() => handleUserClick(u)}>
+
               <td>{u.login}</td>
               <td>{u.name}</td>
+              <td>{u.phone}</td>
+
+              <td style={{ color: u.activated ? "green" : "red" }}>
+                {u.activated ? "Active" : "Inactive"}
+              </td>
+
+              <td>{u.roles?.map((r,i)=><div key={i}>{r}</div>)}</td>
+
+              <td>{u.version}</td>
+              <td>{u.reportingTo}</td>
+
+              <td>
+                {u.geofenceNames?.length > 2 ? (
+                  <details>
+                    <summary>{u.geofenceNames.slice(0,2).join(", ")}</summary>
+                    {u.geofenceNames.map((g,i)=><div key={i}>{g}</div>)}
+                  </details>
+                ) : u.geofenceNames?.map((g,i)=><div key={i}>{g}</div>)}
+              </td>
+
             </tr>
           ))}
         </tbody>
       </table>
+
+      {/* PAGINATION */}
+      <div style={styles.pagination}>
+        <button onClick={() => setCurrentPage(p => Math.max(p-1,1))}>Prev</button>
+        <span>{currentPage} / {totalPages}</span>
+        <button onClick={() => setCurrentPage(p => Math.min(p+1,totalPages))}>Next</button>
+      </div>
 
       {/* MODAL */}
       {selectedUser && (
@@ -249,9 +288,16 @@ function UsersTable() {
             <h3>User Details</h3>
 
             <div style={styles.modalContent}>
-              {Object.entries(selectedUser).map(([k,v])=>(
-                <div key={k}><b>{k}</b>: {JSON.stringify(v)}</div>
-              ))}
+              <table>
+                <tbody>
+                  {Object.entries(selectedUser).map(([k,v])=>(
+                    <tr key={k}>
+                      <td><b>{k}</b></td>
+                      <td>{JSON.stringify(v)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
             <button style={styles.closeBtn} onClick={()=>setSelectedUser(null)}>Close</button>
@@ -270,42 +316,17 @@ const styles = {
   input:{padding:"8px"},
   dropdown:{padding:"8px"},
   dropdownWrapper:{position:"relative"},
-  dropdownMenu:{
-    position:"absolute",
-    top:"40px",
-    background:"white",
-    border:"1px solid #ccc",
-    padding:"10px",
-    width:"200px",
-    maxHeight:"250px",
-    overflowY:"auto"
-  },
-  dropdownTitle:{fontWeight:"bold",marginBottom:"5px"},
-  dropdownItem:{display:"flex",gap:"5px",marginBottom:"5px"},
-  selectAll:{fontWeight:"bold",color:"blue",cursor:"pointer"},
-  doneBtn:{marginTop:"10px",background:"green",color:"white"},
-  downloadBtn:{background:"#2563eb",color:"white"},
+  dropdownMenu:{position:"absolute",top:"40px",background:"white",border:"1px solid #ccc",padding:"10px",maxHeight:"250px",overflowY:"auto"},
+  dropdownItem:{display:"flex",gap:"5px"},
+  selectAll:{fontWeight:"bold",color:"blue"},
+  doneBtn:{marginTop:"5px",background:"green",color:"white"},
+  downloadBtn:{background:"#2563eb",color:"white",padding:"8px"},
   table:{width:"100%",marginTop:"10px"},
-  overlay:{
-    position:"fixed",
-    inset:0,
-    background:"rgba(0,0,0,0.6)",
-    display:"flex",
-    justifyContent:"center",
-    alignItems:"center"
-  },
-  modal:{
-    background:"white",
-    width:"60%",
-    maxHeight:"80vh",
-    overflow:"hidden",
-    display:"flex",
-    flexDirection:"column"
-  },
-  modalContent:{
-    overflowY:"auto",
-    padding:"10px"
-  },
+  row:{cursor:"pointer"},
+  pagination:{display:"flex",justifyContent:"center",gap:"10px"},
+  overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",justifyContent:"center",alignItems:"center"},
+  modal:{background:"white",padding:"20px",width:"60%",maxHeight:"80vh",display:"flex",flexDirection:"column"},
+  modalContent:{overflowY:"auto"},
   closeBtn:{background:"red",color:"white"},
   loader:{textAlign:"center"}
 };
