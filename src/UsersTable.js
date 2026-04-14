@@ -13,7 +13,6 @@ function UsersTable() {
 
   const [loading, setLoading] = useState(true);
   const [globalLoading, setGlobalLoading] = useState(false);
-  const [blocksLoading, setBlocksLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   const [districts, setDistricts] = useState([]);
@@ -27,8 +26,8 @@ function UsersTable() {
 
   const [reportingList, setReportingList] = useState([]);
 
-  const [showBlockDropdown, setShowBlockDropdown] = useState(false);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+  const [showBlockDropdown, setShowBlockDropdown] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
@@ -65,10 +64,8 @@ function UsersTable() {
   useEffect(() => {
     if (!selectedDistrict) return;
 
-    setBlocksLoading(true);
     axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
-      .then(res => setBlocks(res.data))
-      .finally(() => setBlocksLoading(false));
+      .then(res => setBlocks(res.data));
   }, [selectedDistrict]);
 
   // FILTER
@@ -99,10 +96,9 @@ function UsersTable() {
   const currentUsers = filteredUsers.slice(indexOfLastUser - usersPerPage, indexOfLastUser);
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
 
-  // CLICK USER
+  // USER CLICK
   const handleUserClick = (user) => {
     setGlobalLoading(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
 
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data))
@@ -161,7 +157,7 @@ function UsersTable() {
         >
           <option value="">All Reporting</option>
           {reportingList.map(r => (
-            <option key={r} value={r}>{r}</option>
+            <option key={r}>{r}</option>
           ))}
         </select>
 
@@ -184,21 +180,23 @@ function UsersTable() {
         {/* ROLES */}
         {selectedDistrict && (
           <div style={styles.dropdownWrapper}>
-            <button onClick={() => setShowRoleDropdown(!showRoleDropdown)} style={styles.dropdown}>
+            <button style={styles.dropdown} onClick={() => setShowRoleDropdown(!showRoleDropdown)}>
               Select Roles
             </button>
 
             {showRoleDropdown && (
               <div style={styles.dropdownMenu}>
                 {roles.map(r => (
-                  <div key={r} style={styles.dropdownItem}
-                    onClick={() => {
-                      setSelectedRoles(prev =>
-                        prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]
-                      );
-                      setShowRoleDropdown(false);
-                    }}>
-                    {r}
+                  <div key={r}>
+                    <input
+                      type="checkbox"
+                      checked={selectedRoles.includes(r)}
+                      onChange={() =>
+                        setSelectedRoles(prev =>
+                          prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]
+                        )
+                      }
+                    /> {r}
                   </div>
                 ))}
               </div>
@@ -209,31 +207,31 @@ function UsersTable() {
         {/* BLOCKS */}
         {selectedDistrict && (
           <div style={styles.dropdownWrapper}>
-            <button onClick={() => setShowBlockDropdown(!showBlockDropdown)} style={styles.dropdown}>
+            <button style={styles.dropdown} onClick={() => setShowBlockDropdown(!showBlockDropdown)}>
               Select Blocks
             </button>
 
             {showBlockDropdown && (
               <div style={styles.dropdownMenu}>
 
-                {/* SELECT ALL */}
                 <div style={styles.selectAll}
-                  onClick={() => {
-                    setSelectedBlocks(blocks.map(b => b.id));
-                    setShowBlockDropdown(false);
-                  }}>
+                  onClick={() => setSelectedBlocks(blocks.map(b => b.id))}>
                   Select All
                 </div>
 
                 {blocks.map(b => (
-                  <div key={b.id} style={styles.dropdownItem}
-                    onClick={() => {
-                      setSelectedBlocks(prev =>
-                        prev.includes(b.id) ? prev.filter(id => id !== b.id) : [...prev, b.id]
-                      );
-                      setShowBlockDropdown(false);
-                    }}>
-                    {b.name}
+                  <div key={b.id}>
+                    <input
+                      type="checkbox"
+                      checked={selectedBlocks.includes(b.id)}
+                      onChange={() =>
+                        setSelectedBlocks(prev =>
+                          prev.includes(b.id)
+                            ? prev.filter(id => id !== b.id)
+                            : [...prev, b.id]
+                        )
+                      }
+                    /> {b.name}
                   </div>
                 ))}
               </div>
@@ -263,26 +261,29 @@ function UsersTable() {
         </thead>
 
         <tbody>
-          {currentUsers.map((user, i) => (
-            <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
+          {currentUsers.map((u, i) => (
+            <tr key={i} style={styles.row} onClick={() => handleUserClick(u)}>
 
-              <td>{user.login}</td>
-              <td>{user.name}</td>
-              <td>{user.phone}</td>
+              <td>{u.login}</td>
+              <td>{u.name}</td>
+              <td>{u.phone}</td>
 
-              <td style={{ color: user.activated ? "green" : "red" }}>
-                {user.activated ? "Active" : "Inactive"}
+              <td style={{ color: u.activated ? "green" : "red" }}>
+                {u.activated ? "Active" : "Inactive"}
               </td>
 
-              <td>
-                {user.roles?.map((r, i) => <div key={i}>{r}</div>)}
-              </td>
+              <td>{u.roles?.map((r,i)=><div key={i}>{r}</div>)}</td>
 
-              <td>{user.version}</td>
-              <td>{user.reportingTo}</td>
+              <td>{u.version}</td>
+              <td>{u.reportingTo}</td>
 
               <td>
-                {user.geofenceNames?.map((g, i) => <div key={i}>{g}</div>)}
+                {u.geofenceNames?.length > 2 ? (
+                  <details>
+                    <summary>{u.geofenceNames.slice(0,2).join(", ")}</summary>
+                    {u.geofenceNames.map((g,i)=><div key={i}>{g}</div>)}
+                  </details>
+                ) : u.geofenceNames?.map((g,i)=><div key={i}>{g}</div>)}
               </td>
 
             </tr>
@@ -292,29 +293,66 @@ function UsersTable() {
 
       {/* PAGINATION */}
       <div style={styles.pagination}>
-        <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}>Prev</button>
+        <button onClick={() => setCurrentPage(p => Math.max(p-1,1))}>Prev</button>
         <span>{currentPage} / {totalPages}</span>
-        <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>Next</button>
+        <button onClick={() => setCurrentPage(p => Math.min(p+1,totalPages))}>Next</button>
       </div>
+
+      {/* MODAL */}
+      {selectedUser && (
+        <div style={styles.overlay}>
+          <div style={styles.modal}>
+
+            <h3>User Details</h3>
+
+            <table style={styles.detailTable}>
+              <tbody>
+                <tr><td>Login</td><td>{selectedUser.login}</td></tr>
+                <tr><td>Name</td><td>{selectedUser.firstName} {selectedUser.lastName}</td></tr>
+                <tr><td>Phone</td><td>{selectedUser.phone}</td></tr>
+                <tr><td>Status</td><td>{selectedUser.activated ? "Active" : "Inactive"}</td></tr>
+
+                <tr><td>Roles</td>
+                  <td>{selectedUser.authorities?.map((r,i)=><div key={i}>{r}</div>)}</td>
+                </tr>
+
+                <tr><td>Version</td><td>{selectedUser.applicationVersion}</td></tr>
+
+                <tr><td>Geofences</td>
+                  <td>{selectedUser.geofenceNames?.map((g,i)=><div key={i}>{g}</div>)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <button style={styles.closeBtn} onClick={()=>setSelectedUser(null)}>
+              Close
+            </button>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
 }
 
 const styles = {
-  page: { padding: "20px" },
-  topBar: { display: "flex", gap: "10px", flexWrap: "wrap" },
-  input: { padding: "8px" },
-  dropdown: { padding: "8px", borderRadius: "6px", border: "1px solid #ccc" },
-  dropdownWrapper: { position: "relative" },
-  dropdownMenu: { position: "absolute", top: "40px", background: "white", border: "1px solid #ccc" },
-  dropdownItem: { padding: "6px", cursor: "pointer" },
-  selectAll: { padding: "6px", fontWeight: "bold", color: "#2563eb" },
-  downloadBtn: { background: "#2563eb", color: "white", padding: "8px" },
-  table: { width: "100%" },
-  row: { cursor: "pointer" },
-  pagination: { display: "flex", justifyContent: "center", gap: "10px" },
-  loader: { textAlign: "center" }
+  page:{padding:"20px"},
+  topBar:{display:"flex",gap:"10px",flexWrap:"wrap"},
+  input:{padding:"8px"},
+  dropdown:{padding:"8px"},
+  dropdownWrapper:{position:"relative"},
+  dropdownMenu:{position:"absolute",top:"40px",background:"white",border:"1px solid #ccc",padding:"10px"},
+  selectAll:{fontWeight:"bold",color:"blue",cursor:"pointer"},
+  downloadBtn:{background:"#2563eb",color:"white",padding:"8px"},
+  table:{width:"100%",marginTop:"10px"},
+  row:{cursor:"pointer"},
+  pagination:{display:"flex",justifyContent:"center",gap:"10px"},
+  overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",justifyContent:"center",alignItems:"center"},
+  modal:{background:"white",padding:"20px",width:"50%"},
+  detailTable:{width:"100%"},
+  closeBtn:{background:"red",color:"white",padding:"8px"},
+  loader:{textAlign:"center"}
 };
 
 export default UsersTable;
