@@ -71,7 +71,7 @@ function UsersTable() {
       .finally(() => setBlocksLoading(false));
   }, [selectedDistrict]);
 
-  // FILTER LOGIC
+  // FILTER
   const filteredUsers = users.filter(user => {
 
     const matchSearch =
@@ -108,30 +108,6 @@ function UsersTable() {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data))
       .finally(() => setGlobalLoading(false));
-  };
-
-  // DOWNLOAD
-  const downloadAll = () => {
-    setDownloading(true);
-
-    const data = users.map(u => ({
-      Login: u.login,
-      Name: u.name,
-      Phone: u.phone,
-      Status: u.activated ? "Active" : "Inactive",
-      ReportingTo: u.reportingTo,
-      Roles: u.roles?.join(", "),
-      Version: u.version
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Users");
-
-    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([buffer]), "users.xlsx");
-
-    setDownloading(false);
   };
 
   return (
@@ -181,69 +157,6 @@ function UsersTable() {
           ))}
         </select>
 
-        {/* ROLES */}
-        {selectedDistrict && (
-          <div style={styles.dropdownWrapper}>
-            <button onClick={() => setShowRoleDropdown(!showRoleDropdown)} style={styles.dropdown}>
-              Select Roles
-            </button>
-
-            {showRoleDropdown && (
-              <div style={styles.dropdownMenu}>
-                {roles.map(r => (
-                  <div key={r} style={styles.dropdownItem}
-                    onClick={() => {
-                      setSelectedRoles(prev =>
-                        prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]
-                      );
-                      setShowRoleDropdown(false);
-                    }}>
-                    {r}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* BLOCKS */}
-        {selectedDistrict && (
-          <div style={styles.dropdownWrapper}>
-            <button onClick={() => setShowBlockDropdown(!showBlockDropdown)} style={styles.dropdown}>
-              Select Blocks
-            </button>
-
-            {showBlockDropdown && (
-              <div style={styles.dropdownMenu}>
-
-                <div style={styles.selectAll}
-                  onClick={() => {
-                    setSelectedBlocks(blocks.map(b => b.id));
-                    setShowBlockDropdown(false);
-                  }}>
-                  Select All
-                </div>
-
-                {blocks.map(b => (
-                  <div key={b.id} style={styles.dropdownItem}
-                    onClick={() => {
-                      setSelectedBlocks(prev =>
-                        prev.includes(b.id) ? prev.filter(id => id !== b.id) : [...prev, b.id]
-                      );
-                      setShowBlockDropdown(false);
-                    }}>
-                    {b.name}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        <button onClick={downloadAll} style={styles.downloadBtn}>
-          {downloading ? "Downloading..." : "Download All"}
-        </button>
-
       </div>
 
       {/* TABLE */}
@@ -255,14 +168,15 @@ function UsersTable() {
             <th>Phone</th>
             <th>Status</th>
             <th>Roles</th>
-            <th>Version</th>
             <th>Reporting To</th>
+            <th>Geofences</th>
           </tr>
         </thead>
 
         <tbody>
           {currentUsers.map((user, i) => (
             <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
+
               <td>{user.login}</td>
               <td>{user.name}</td>
               <td>{user.phone}</td>
@@ -271,9 +185,33 @@ function UsersTable() {
                 {user.activated ? "Active" : "Inactive"}
               </td>
 
-              <td>{user.roles?.join(", ")}</td>
-              <td>{user.version}</td>
+              {/* ✅ ROLES FIX */}
+              <td>
+                {user.roles?.map((r, idx) => (
+                  <div key={idx}>{r}</div>
+                ))}
+              </td>
+
               <td>{user.reportingTo}</td>
+
+              {/* ✅ GEOFENCE FIX */}
+              <td>
+                {user.geofenceNames?.length > 2 ? (
+                  <details>
+                    <summary>
+                      {user.geofenceNames.slice(0, 2).join(", ")}
+                    </summary>
+                    {user.geofenceNames.map((g, idx) => (
+                      <div key={idx}>{g}</div>
+                    ))}
+                  </details>
+                ) : (
+                  user.geofenceNames?.map((g, idx) => (
+                    <div key={idx}>{g}</div>
+                  ))
+                )}
+              </td>
+
             </tr>
           ))}
         </tbody>
@@ -290,7 +228,6 @@ function UsersTable() {
       {selectedUser && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
-
             <h3>User Details</h3>
 
             <div style={styles.modalContent}>
@@ -298,15 +235,17 @@ function UsersTable() {
               <p><b>Name:</b> {selectedUser.firstName} {selectedUser.lastName}</p>
               <p><b>Phone:</b> {selectedUser.phone}</p>
               <p><b>Status:</b> {selectedUser.activated ? "Active" : "Inactive"}</p>
-              <p><b>Roles:</b> {selectedUser.authorities?.join(", ")}</p>
-              <p><b>Version:</b> {selectedUser.applicationVersion}</p>
-              <p><b>Geofences:</b> {selectedUser.geofenceNames?.join(", ")}</p>
+
+              <p><b>Roles:</b></p>
+              {selectedUser.authorities?.map((r, i) => <div key={i}>{r}</div>)}
+
+              <p><b>Geofences:</b></p>
+              {selectedUser.geofenceNames?.map((g, i) => <div key={i}>{g}</div>)}
             </div>
 
             <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
               Close
             </button>
-
           </div>
         </div>
       )}
@@ -315,20 +254,14 @@ function UsersTable() {
   );
 }
 
-// STYLES
 const styles = {
   page: { padding: "20px", maxWidth: "1200px", margin: "auto" },
-  topBar: { display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "10px" },
+  topBar: { display: "flex", gap: "10px", marginBottom: "10px" },
   input: { padding: "8px" },
-  dropdown: { padding: "8px", borderRadius: "6px", border: "1px solid #ccc" },
-  dropdownWrapper: { position: "relative" },
-  dropdownMenu: { position: "absolute", top: "40px", background: "white", border: "1px solid #ccc" },
-  dropdownItem: { padding: "6px", cursor: "pointer" },
-  selectAll: { padding: "6px", fontWeight: "bold", color: "#2563eb" },
-  downloadBtn: { background: "#2563eb", color: "white", padding: "8px" },
+  dropdown: { padding: "8px" },
   table: { width: "100%" },
   row: { cursor: "pointer" },
-  pagination: { display: "flex", justifyContent: "center", gap: "10px", marginTop: "10px" },
+  pagination: { display: "flex", justifyContent: "center", gap: "10px" },
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center" },
   modal: { background: "white", padding: "20px", width: "50%" },
   modalContent: { maxHeight: "60vh", overflowY: "auto" },
