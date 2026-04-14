@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -23,12 +23,13 @@ function UsersTable() {
 
   const [showBlockDropdown, setShowBlockDropdown] = useState(false);
 
+  const tableRef = useRef(null);
+
   // 🚀 LOAD USERS
   useEffect(() => {
     setLoading(true);
     axios.get("https://user-extract.onrender.com/api/users-summary")
       .then(res => setUsers(res.data))
-      .catch(err => console.error(err))
       .finally(() => setLoading(false));
   }, []);
 
@@ -41,17 +42,16 @@ function UsersTable() {
   // 🚀 BLOCKS
   useEffect(() => {
     if (!selectedDistrict) return;
-  
 
     axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
       .then(res => setBlocks(res.data));
   }, [selectedDistrict]);
-useEffect(() => {
-  window.scrollTo({
-    top: 200,
-    behavior: "smooth"
-  });
-}, [currentPage]);
+
+  // 🔥 SCROLL FIX
+  useEffect(() => {
+    tableRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [currentPage]);
+
   // 🔍 FILTER
   const filteredUsers = users.filter(user => {
 
@@ -60,9 +60,7 @@ useEffect(() => {
 
     const matchDistrict =
       !selectedDistrict ||
-      blocks.some(b =>
-        user.geofenceIds?.includes(b.id)
-      );
+      blocks.some(b => user.geofenceIds?.includes(b.id));
 
     const matchBlocks =
       selectedBlocks.length === 0 ||
@@ -81,8 +79,7 @@ useEffect(() => {
   // 🔥 USER CLICK
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
-      .then(res => setSelectedUser(res.data))
-      .catch(err => console.error(err));
+      .then(res => setSelectedUser(res.data));
   };
 
   // ⬇ DOWNLOAD
@@ -132,7 +129,7 @@ useEffect(() => {
             setSearch(e.target.value);
             setCurrentPage(1);
           }}
-          style={styles.search}
+          style={styles.input}
         />
 
         {/* DISTRICT */}
@@ -156,7 +153,7 @@ useEffect(() => {
 
             <button
               onClick={() => setShowBlockDropdown(!showBlockDropdown)}
-              style={styles.dropdownBtn}
+              style={styles.dropdown}
             >
               {selectedBlocks.length > 0
                 ? `${selectedBlocks.length} Blocks Selected`
@@ -196,52 +193,54 @@ useEffect(() => {
       </div>
 
       {/* TABLE */}
-      {!loading && (
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th>Login</th>
-              <th>Name</th>
-              <th>Phone</th>
-              <th>Status</th>
-              <th>Reporting To</th>
-              <th>Geofences</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {currentUsers.map((user, i) => (
-              <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
-                <td>{user.login}</td>
-                <td>{user.name}</td>
-                <td>{user.phone}</td>
-
-                <td style={{
-                  color: user.activated ? "green" : "red",
-                  fontWeight: "bold"
-                }}>
-                  {user.activated ? "Active" : "Inactive"}
-                </td>
-
-                <td>{user.reportingTo}</td>
-
-                <td onClick={(e) => e.stopPropagation()}>
-                  {user.geofenceNames?.length > 2 ? (
-                    <details>
-                      <summary>{user.geofenceNames.slice(0, 2).join(", ")}</summary>
-                      {user.geofenceNames.map((g, i) => (
-                        <div key={i}>{g}</div>
-                      ))}
-                    </details>
-                  ) : (
-                    user.geofenceNames?.join(", ")
-                  )}
-                </td>
+      <div ref={tableRef}>
+        {!loading && (
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th>Login</th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th>Reporting To</th>
+                <th>Geofences</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+
+            <tbody>
+              {currentUsers.map((user, i) => (
+                <tr key={i} style={styles.row} onClick={() => handleUserClick(user)}>
+                  <td>{user.login}</td>
+                  <td>{user.name}</td>
+                  <td>{user.phone}</td>
+
+                  <td style={{
+                    color: user.activated ? "green" : "red",
+                    fontWeight: "bold"
+                  }}>
+                    {user.activated ? "Active" : "Inactive"}
+                  </td>
+
+                  <td>{user.reportingTo}</td>
+
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {user.geofenceNames?.length > 2 ? (
+                      <details>
+                        <summary>{user.geofenceNames.slice(0, 2).join(", ")}</summary>
+                        {user.geofenceNames.map((g, i) => (
+                          <div key={i}>{g}</div>
+                        ))}
+                      </details>
+                    ) : (
+                      user.geofenceNames?.join(", ")
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       {/* PAGINATION */}
       {!loading && (
@@ -252,7 +251,7 @@ useEffect(() => {
         </div>
       )}
 
-      {/* 🔥 MODAL CLEAN UI */}
+      {/* MODAL */}
       {selectedUser && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
@@ -260,76 +259,7 @@ useEffect(() => {
             <h2>User Details</h2>
 
             <div style={styles.scrollBox}>
-              <table style={styles.detailTable}>
-                <tbody>
-
-                  {Object.entries(selectedUser).map(([key, value]) => {
-
-                    const hidden = [
-                      "geofences","groups","vendors",
-                      "trakeyeType","trakeyeTypeAttribute",
-                      "trakeyeTypeAttributeValues","vendor"
-                    ];
-
-                    if (hidden.includes(key)) return null;
-
-                    if (key === "activated") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Status</td>
-                          <td style={{ color: value ? "green" : "red" }}>
-                            {value ? "Active" : "Inactive"}
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    if (key === "authorities") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Roles</td>
-                          <td>
-                            {value?.map((r, i) => <div key={i}>{r}</div>)}
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    if (key === "ownedBy") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Reporting To</td>
-                          <td>{value?.map(v => v.login).join(", ")}</td>
-                        </tr>
-                      );
-                    }
-
-                    if (key === "geofenceNames") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Geofences</td>
-                          <td>
-                            {value?.length > 2 ? (
-                              <details>
-                                <summary>{value.slice(0, 2).join(", ")}</summary>
-                                {value.map((g, i) => <div key={i}>{g}</div>)}
-                              </details>
-                            ) : value?.join(", ")}
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return (
-                      <tr key={key}>
-                        <td style={styles.key}>{key}</td>
-                        <td>{Array.isArray(value) ? value.join(", ") : value?.toString()}</td>
-                      </tr>
-                    );
-                  })}
-
-                </tbody>
-              </table>
+              <pre>{JSON.stringify(selectedUser, null, 2)}</pre>
             </div>
 
             <button onClick={() => setSelectedUser(null)} style={styles.closeBtn}>
@@ -348,10 +278,18 @@ useEffect(() => {
 const styles = {
   page: { padding: "20px", maxWidth: "1200px", margin: "auto" },
   topBar: { display: "flex", gap: "10px", marginBottom: "10px" },
-  search: { padding: "8px" },
-  dropdown: { padding: "8px" },
+  input: { padding: "8px" },
+
+  dropdown: {
+    padding: "8px 12px",
+    borderRadius: "6px",
+    border: "1px solid #ccc",
+    background: "white",
+    cursor: "pointer"
+  },
+
   dropdownWrapper: { position: "relative" },
-  dropdownBtn: { padding: "8px", cursor: "pointer" },
+
   dropdownMenu: {
     position: "absolute",
     top: "40px",
@@ -361,17 +299,49 @@ const styles = {
     background: "white",
     border: "1px solid #ccc"
   },
-  dropdownItem: { padding: "6px", display: "flex", gap: "8px", cursor: "pointer" },
-  downloadBtn: { padding: "8px" },
+
+  dropdownItem: {
+    padding: "6px",
+    display: "flex",
+    gap: "8px",
+    cursor: "pointer"
+  },
+
+  downloadBtn: {
+    background: "#2563eb",
+    color: "white",
+    padding: "8px",
+    borderRadius: "6px",
+    border: "none",
+    cursor: "pointer"
+  },
+
   table: { width: "100%" },
   row: { cursor: "pointer" },
+
   pagination: { marginTop: "10px" },
+
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)" },
-  modal: { background: "white", padding: "20px", width: "600px", margin: "50px auto", borderRadius: "10px" },
+
+  modal: {
+    background: "white",
+    padding: "20px",
+    width: "600px",
+    margin: "50px auto",
+    borderRadius: "10px"
+  },
+
   scrollBox: { maxHeight: "400px", overflowY: "auto" },
-  detailTable: { width: "100%" },
-  key: { fontWeight: "bold", width: "40%" },
-  closeBtn: { marginTop: "10px" },
+
+  closeBtn: {
+    background: "#dc2626",
+    color: "white",
+    padding: "8px",
+    borderRadius: "6px",
+    border: "none",
+    cursor: "pointer"
+  },
+
   loader: { textAlign: "center" }
 };
 
