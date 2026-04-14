@@ -186,37 +186,60 @@ function UsersTable() {
 )}
 
         {/* BLOCKS */}
-        {selectedDistrict && (
-          <div>
-            <button style={styles.dropdownBtn} onClick={()=>setShowBlockDropdown(!showBlockDropdown)}>Blocks</button>
+{selectedDistrict && (
+  <div style={styles.dropdownWrapper}>
 
-            {showBlockDropdown && (
-              <div style={styles.dropdown}>
-                <div onClick={()=>setSelectedBlocks(blocks.map(b=>b.id))}>
-                  Select All
-                </div>
+    <button
+      style={styles.dropdownBtn}
+      onClick={() => setShowBlockDropdown(!showBlockDropdown)}
+    >
+      Blocks ({selectedBlocks.length})
+    </button>
 
-                {blocks.map(b=>(
-                  <label key={b.id}>
-                    <input type="checkbox"
-                      checked={selectedBlocks.includes(b.id)}
-                      onChange={() =>
-                        setSelectedBlocks(prev =>
-                          prev.includes(b.id)
-                            ? prev.filter(id=>id!==b.id)
-                            : [...prev,b.id]
-                        )
-                      }
-                    />
-                    {b.name}
-                  </label>
-                ))}
+    {showBlockDropdown && (
+      <div style={styles.dropdownMenu}>
 
-                <button style={styles.dropdownBtn} onClick={()=>setShowBlockDropdown(false)}>Done</button>
-              </div>
-            )}
-          </div>
-        )}
+        <div style={styles.dropdownTitle}>Select Blocks</div>
+
+        {/* SELECT ALL */}
+        <div
+          style={styles.selectAll}
+          onClick={() => setSelectedBlocks(blocks.map(b => b.id))}
+        >
+          Select All
+        </div>
+
+        <div style={styles.dropdownList}>
+          {blocks.map(b => (
+            <label key={b.id} style={styles.dropdownItem}>
+              <input
+                type="checkbox"
+                checked={selectedBlocks.includes(b.id)}
+                onChange={() =>
+                  setSelectedBlocks(prev =>
+                    prev.includes(b.id)
+                      ? prev.filter(id => id !== b.id)
+                      : [...prev, b.id]
+                  )
+                }
+              />
+              <span>{b.name}</span>
+            </label>
+          ))}
+        </div>
+
+        <button
+          style={styles.closeDropdownBtn}
+          onClick={() => setShowBlockDropdown(false)}
+        >
+          Close ✖
+        </button>
+
+      </div>
+    )}
+
+  </div>
+)}
 
         <button onClick={downloadAll}>
           {downloading ? "Downloading..." : "Download"}
@@ -556,6 +579,13 @@ closeDropdownBtn: {
   border: "none",
   borderRadius: "5px",
   cursor: "pointer"
+},
+selectAll: {
+  padding: "8px 10px",
+  fontWeight: "bold",
+  color: "#2563eb",
+  cursor: "pointer",
+  borderBottom: "1px solid #eee"
 }
 
 };
