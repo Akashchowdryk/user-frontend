@@ -268,9 +268,139 @@ function UsersTable() {
         </button>
 
       </div>
+ {/* TABLE */}
+      <table style={styles.table} border="1" width="100%">
+        <thead>
+          <tr style={styles.row}>
+            <th style={styles.th}>Login</th>
+            <th style={styles.th}>Name</th>
+            <th style={styles.th}>Phone</th>
+            <th style={styles.th}>Status</th>
+            <th style={styles.th}>Roles</th>
+            <th style={styles.th}>Version</th>
+            <th style={styles.th}>Reporting</th>
+            <th style={styles.th}>Geofences</th>
+          </tr>
+        </thead>
 
-      {/* TABLE + MODAL SAME AS YOUR CODE (UNCHANGED) */}
+        <tbody>
+          {currentUsers.map((u,i)=>(
+            <tr style={styles.row}key={i} onClick={()=>handleUserClick(u)}>
 
+              <td style={styles.td}>{u.login}</td>
+              <td style={styles.td}>{u.name}</td>
+              <td style={styles.td}>{u.phone}</td>
+
+              <td style={{color:u.activated?"green":"red"}}>
+                {u.activated?"Active":"Inactive"}
+              </td>
+
+              <td style={styles.td}>{u.roles?.map((r,i)=><div key={i}>{r}</div>)}</td>
+
+              <td style={styles.td}>{u.version}</td>
+              <td style={styles.td}>{u.reportingTo}</td>
+
+              <td onClick={(e)=>e.stopPropagation()}>
+                {u.geofenceNames?.length>2 ? (
+                  <details>
+                    <summary>{u.geofenceNames.slice(0,2).join(", ")}</summary>
+                    {u.geofenceNames.map((g,i)=><div key={i}>{g}</div>)}
+                  </details>
+                ) : u.geofenceNames?.map((g,i)=><div key={i}>{g}</div>)}
+              </td>
+
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* PAGINATION */}
+      <div style={styles.pagination}>
+        <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.max(p-1,1))}>Prev</button>
+        <span>{currentPage}/{totalPages}</span>
+        <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.min(p+1,totalPages))}>Next</button>
+      </div>
+
+      {/* MODAL */}
+      {selectedUser && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modal}>
+            <h3>User Details</h3>
+
+           <div style={styles.scrollBox}>
+              <table style={styles.detailTable}>
+                <tbody>
+
+                  {Object.entries(selectedUser).map(([key, value]) => {
+
+                    const hidden = [
+                      "geofences","groups","vendors",
+                      "trakeyeType","trakeyeTypeAttribute",
+                      "trakeyeTypeAttributeValues","vendor"
+                    ];
+
+                    if (hidden.includes(key)) return null;
+
+                    if (key === "activated") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Status</td>
+                          <td style={{ color: value ? "green" : "red" }}>
+                            {value ? "Active" : "Inactive"}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    if (key === "authorities") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Roles</td>
+                          <td>{value?.map((r, i) => <div key={i}>{r}</div>)}</td>
+                        </tr>
+                      );
+                    }
+
+                    if (key === "ownedBy") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Reporting To</td>
+                          <td>{value?.map(v => v.login).join(", ")}</td>
+                        </tr>
+                      );
+                    }
+
+                    if (key === "geofenceNames") {
+                      return (
+                        <tr key={key}>
+                          <td style={styles.key}>Geofences</td>
+                          <td>
+                            {value?.length > 2 ? (
+                              <details>
+                                <summary>{value.slice(0, 2).join(", ")}</summary>
+                                {value.map((g, i) => <div key={i}>{g}</div>)}
+                              </details>
+                            ) : value?.join(", ")}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <tr key={key}>
+                        <td style={styles.key}>{key}</td>
+                        <td>{Array.isArray(value) ? value.join(", ") : value?.toString()}</td>
+                      </tr>
+                    );
+                  })}
+
+                </tbody>
+              </table>
+            </div>
+            <button style={styles.closeBtn} onClick={()=>setSelectedUser(null)}>Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
