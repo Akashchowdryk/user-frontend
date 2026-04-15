@@ -548,6 +548,7 @@ loaderContainer:{
   margin:"15px 0"
 },
 
+
 scrollBox: {
   overflowY: "auto",
   maxHeight: "60vh"
@@ -557,7 +558,18 @@ detailTable: {
   width: "100%",
   borderCollapse: "collapse"
 },
+dropdownItem: {
+  padding: "6px",
+  cursor: "pointer"
+},
 
+input: {
+  padding: "8px",
+  width: "100%",
+  marginBottom: "5px",
+  border: "1px solid #ccc",
+  borderRadius: "5px"
+},
 key: {
   fontWeight: "bold",
   width: "40%",
