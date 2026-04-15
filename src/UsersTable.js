@@ -109,11 +109,7 @@ function UsersTable() {
         const block = blocks.find(b => b.id === id);
         return block && user.geofenceNames?.includes(block.name);
       }));
-      {currentUsers.length === 0 && (
-  <div style={{ textAlign: "center", marginTop: "20px", color: "#888" }}>
-    No users found for selected filters
-  </div>
-)}
+
 
   const matchDistrict =
     !selectedDistrict ||
