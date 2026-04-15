@@ -24,7 +24,8 @@ function UsersTable() {
   const [roles, setRoles] = useState([]);
   const [selectedRoles, setSelectedRoles] = useState([]);
 
-  const [reportingList, setReportingList] = useState([]);
+  const [showReportingDropdown, setShowReportingDropdown] = useState(false);
+const [reportSearch, setReportSearch] = useState("");
 
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showBlockDropdown, setShowBlockDropdown] = useState(false);
@@ -169,10 +170,59 @@ function UsersTable() {
           onChange={(e) => setSearch(e.target.value)}
         />
 
-        <select onChange={(e)=>setSelectedReportingTo(e.target.value)}>
-          <option value="">All Reporting</option>
-          {reportingList.map(r=><option key={r}>{r}</option>)}
-        </select>
+       <div style={styles.dropdownWrapper}>
+
+  <button
+    style={styles.dropdownBtn}
+    onClick={() => setShowReportingDropdown(!showReportingDropdown)}
+  >
+    {selectedReportingTo || "Reporting To"}
+  </button>
+
+  {showReportingDropdown && (
+    <div style={styles.dropdownMenu}>
+
+      {/* SEARCH INPUT */}
+      <input
+        type="text"
+        placeholder="Search..."
+        value={reportSearch}
+        onChange={(e) => setReportSearch(e.target.value)}
+        style={styles.input}
+      />
+
+      {/* OPTIONS */}
+      <div style={styles.dropdownList}>
+        {reportingList
+          .filter(r =>
+            r.toLowerCase().includes(reportSearch.toLowerCase())
+          )
+          .map(r => (
+            <div
+              key={r}
+              style={styles.dropdownItem}
+              onClick={() => {
+                setSelectedReportingTo(r);
+                setShowReportingDropdown(false);
+                setReportSearch("");
+              }}
+            >
+              {r}
+            </div>
+          ))}
+      </div>
+
+      <button
+        style={styles.closeDropdownBtn}
+        onClick={() => setShowReportingDropdown(false)}
+      >
+        Close
+      </button>
+
+    </div>
+  )}
+
+</div>
 
         <select onChange={(e)=>setSelectedDistrict(e.target.value)}>
           <option value="">District</option>
