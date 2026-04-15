@@ -220,6 +220,12 @@ function UsersTable() {
 
         {/* BLOCKS */}
         <div style={styles.dropdownWrapper}>
+          {loading && (
+        <div style={styles.loaderContainer}>
+          <div className="spinner"></div>
+          <span>Loading blocks...</span>
+        </div>
+      )}
           <button style={styles.dropdownBtn} onClick={()=>setShowBlockDropdown(!showBlockDropdown)}>
             Blocks ({selectedBlocks.length})
           </button>
