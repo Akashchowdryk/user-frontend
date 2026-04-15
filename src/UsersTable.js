@@ -18,6 +18,7 @@ function UsersTable() {
   const [selectedDistrict, setSelectedDistrict] = useState("");
 
   const [blocks, setBlocks] = useState([]);
+  const [blocksLoading, setBlocksLoading] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState([]);
 
   const [roles, setRoles] = useState([]);
@@ -32,29 +33,24 @@ function UsersTable() {
   const usersPerPage = 10;
 
   // USERS
-  useEffect(() => {
-    setLoading(true);
+ useEffect(() => {
 
-    axios.get("https://user-extract.onrender.com/api/users-summary")
-      .then(res => {
-        setUsers(res.data);
+  if (!selectedDistrict) {
+    setBlocks([]);
+    setSelectedBlocks([]);
+    return;
+  }
 
-        const roleSet = new Set();
-        const reportingSet = new Set();
+  setBlocksLoading(true);   // 🔥 START LOADING
 
-        res.data.forEach(u => {
-          u.roles?.forEach(r => roleSet.add(r));
-          if (u.reportingTo) reportingSet.add(u.reportingTo);
-        });
+  axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
+    .then(res => {
+      setBlocks(res.data);
+      setSelectedBlocks(res.data.map(b => b.id)); // default select all
+    })
+    .finally(() => setBlocksLoading(false)); // 🔥 STOP LOADING
 
-        const rolesArr = [...roleSet];
-        setRoles(rolesArr);
-        setSelectedRoles(rolesArr); // ✅ default select all
-
-        setReportingList([...reportingSet]);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+}, [selectedDistrict]);
 
   // DISTRICTS
   useEffect(() => {
@@ -144,7 +140,7 @@ function UsersTable() {
 
       {loading && (
         <div style={styles.loaderContainer}>
-          <div style={styles.spinner}></div>
+          <div className="spinner"></div>
           <div>Loading users...</div>
         </div>
       )}
@@ -223,44 +219,57 @@ function UsersTable() {
           </button>
 
           {showBlockDropdown && (
-            <div style={styles.dropdownMenu}>
+  <div style={styles.dropdownMenu}>
 
-              <div style={styles.dropdownTitle}>Select Blocks</div>
+    {/* 🔥 LOADER HERE */}
+    {blocksLoading ? (
+      <div style={styles.loaderContainer}>
+        <div className="spinner"></div>
+        <span>Loading blocks...</span>
+      </div>
+    ) : (
+      <>
+        <div style={styles.dropdownTitle}>Select Blocks</div>
 
-              <div style={styles.selectAll}
-                onClick={() => {
-                  if (selectedBlocks.length === blocks.length) {
-                    setSelectedBlocks([]);
-                  } else {
-                    setSelectedBlocks(blocks.map(b => b.id));
-                  }
-                }}>
-                {selectedBlocks.length === blocks.length ? "Unselect All" : "Select All"}
-              </div>
+        <div style={styles.selectAll}
+          onClick={() => {
+            if (selectedBlocks.length === blocks.length) {
+              setSelectedBlocks([]);
+            } else {
+              setSelectedBlocks(blocks.map(b => b.id));
+            }
+          }}>
+          {selectedBlocks.length === blocks.length ? "Unselect All" : "Select All"}
+        </div>
 
-              <div style={styles.dropdownList}>
-                {blocks.map(b => (
-                  <label key={b.id} style={styles.dropdownItem}>
-                    <input
-                      type="checkbox"
-                      checked={selectedBlocks.includes(b.id)}
-                      onChange={() =>
-                        setSelectedBlocks(prev =>
-                          prev.includes(b.id)
-                            ? prev.filter(id => id !== b.id)
-                            : [...prev, b.id]
-                        )
-                      }
-                    />
-                    {b.name}
-                  </label>
-                ))}
-              </div>
+        <div style={styles.dropdownList}>
+          {blocks.map(b => (
+            <label key={b.id} style={styles.dropdownItem}>
+              <input
+                type="checkbox"
+                checked={selectedBlocks.includes(b.id)}
+                onChange={() =>
+                  setSelectedBlocks(prev =>
+                    prev.includes(b.id)
+                      ? prev.filter(id => id !== b.id)
+                      : [...prev, b.id]
+                  )
+                }
+              />
+              {b.name}
+            </label>
+          ))}
+        </div>
 
-              <button style={styles.closeDropdownBtn} onClick={()=>setShowBlockDropdown(false)}>Close</button>
+        <button style={styles.closeDropdownBtn}
+          onClick={()=>setShowBlockDropdown(false)}>
+          Close
+        </button>
+      </>
+    )}
 
-            </div>
-          )}
+  </div>
+)}
         </div>
 
         <button style={styles.downloadBtn} onClick={downloadAll}>
@@ -474,6 +483,13 @@ modalHeader: {
   alignItems: "center",
   borderBottom: "1px solid #eee",
   marginBottom: "10px"
+},
+loaderContainer:{
+  display:"flex",
+  alignItems:"center",
+  justifyContent:"center",
+  gap:"10px",
+  margin:"15px 0"
 },
 
 scrollBox: {
