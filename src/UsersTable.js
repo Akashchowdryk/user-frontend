@@ -102,12 +102,12 @@ function UsersTable() {
       selectedRoles.some(r => user.roles?.includes(r));
 
     const matchBlocks =
-  selectedDistrict
-    ? selectedBlocks.length > 0 && selectedBlocks.some(id => {
-        const block = blocks.find(b => b.id === id);
-        return block && user.geofenceNames?.includes(block.name);
-      })
-    : true;
+  !selectedDistrict ||
+  (selectedBlocks.length > 0 &&
+    selectedBlocks.some(id => {
+      const block = blocks.find(b => b.id === id);
+      return block && user.geofenceNames?.includes(block.name);
+    }));
     {currentUsers.length === 0 && (
   <div style={{ textAlign: "center", marginTop: "20px", color: "#888" }}>
     No users found for selected filters
