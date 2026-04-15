@@ -24,8 +24,9 @@ function UsersTable() {
   const [roles, setRoles] = useState([]);
   const [selectedRoles, setSelectedRoles] = useState([]);
 
+  const [reportingList, setReportingList] = useState([]);
   const [showReportingDropdown, setShowReportingDropdown] = useState(false);
-const [reportSearch, setReportSearch] = useState("");
+  const [reportSearch, setReportSearch] = useState("");
 
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showBlockDropdown, setShowBlockDropdown] = useState(false);
@@ -629,5 +630,4 @@ pageBtn:{
   cursor:"pointer"
 }
 };
-
 export default UsersTable;
