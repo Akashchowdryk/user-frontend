@@ -499,7 +499,7 @@ function UsersTable() {
 
 const styles = {
   page:{padding:"20px"},
-  filters:{display:"flex",gap:"10px",flexWrap:"wrap"},
+  filters:{display:"flex",gap:"10px",flexWrap:"nowrap",alignItems:"center",overfloewX:"auto"},
   input:{padding:"8px"},
   dropdownWrapper:{position:"relative"},
   dropdownBtn:{padding:"8px",border:"1px solid #ccc",cursor:"pointer"},
@@ -566,7 +566,7 @@ dropdownItem: {
 
 input: {
   padding: "8px",
-  width: "100%",
+  width: "180px",
   marginBottom: "5px",
   border: "1px solid #ccc",
   borderRadius: "5px"
@@ -628,6 +628,26 @@ pageBtn:{
   border:"1px solid #ccc",
   borderRadius:"5px",
   cursor:"pointer"
+},
+input: {
+  padding: "8px",
+  width: "180px",
+  marginBottom: "5px",
+  border: "1px solid #ccc",
+  borderRadius: "5px"
+},
+
+dropdownItem: {
+  padding: "6px",
+  cursor: "pointer"
+},
+
+loaderContainer:{
+  display:"flex",
+  alignItems:"center",
+  justifyContent:"center",
+  gap:"10px",
+  margin:"15px 0"
 }
 };
 export default UsersTable;
