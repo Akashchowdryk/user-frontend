@@ -150,6 +150,12 @@ function UsersTable() {
           <span>Loading users...</span>
         </div>
       )}
+      {blocksLoading && (
+  <div style={styles.loaderContainer}>
+    <div className="spinner"></div>
+    <span>Loading blocks...</span>
+  </div>
+)}
 
       {/* FILTERS */}
       <div style={styles.filters}>
@@ -220,13 +226,8 @@ function UsersTable() {
 
         {/* BLOCKS */}
         <div style={styles.dropdownWrapper}>
-          {loading && (
-        <div style={styles.loaderContainer}>
-          <div className="spinner"></div>
-          <span>Loading blocks...</span>
-        </div>
-      )}
-          <button style={styles.dropdownBtn} onClick={()=>setShowBlockDropdown(!showBlockDropdown)}>
+          
+          <button style={styles.dropdownBtn} disabled={blocksLoading} onClick={()=>setShowBlockDropdown(!showBlockDropdown)}>
             Blocks ({selectedBlocks.length})
           </button>
 
