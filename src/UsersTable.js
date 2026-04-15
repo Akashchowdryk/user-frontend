@@ -89,41 +89,32 @@ function UsersTable() {
   }, [search, selectedReportingTo, selectedDistrict, selectedRoles, selectedBlocks]);
 
   // FILTER
-  const filteredUsers = users.filter(user => {
+  const filteredUsers = users.length === 0 ? [] : users.filter(user => {
 
-    const matchSearch =
-      user.login?.toLowerCase().includes(search.toLowerCase());
+  const matchSearch =
+    user.login?.toLowerCase().includes(search.toLowerCase());
 
-    const matchReporting =
-      !selectedReportingTo || user.reportingTo === selectedReportingTo;
+  const matchReporting =
+    !selectedReportingTo || user.reportingTo === selectedReportingTo;
 
-    const matchRoles =
-      selectedRoles.length === 0 ||
-      selectedRoles.some(r => user.roles?.includes(r));
+  const matchRoles =
+    selectedRoles.length === 0 ||
+    selectedRoles.some(r => user.roles?.includes(r));
 
-    const matchBlocks =
-  selectedDistrict
-    ? (blocks.length === 0 || selectedBlocks.length === 0
-        ? false
-        : selectedBlocks.some(id => {
-            const block = blocks.find(b => b.id === id);
-            return block && user.geofenceNames?.includes(block.name);
-          })
-      )
-    : true;
-    {currentUsers.length === 0 && (
-  <div style={{ textAlign: "center", marginTop: "20px", color: "#888" }}>
-    No users found for selected filters
-  </div>
-)}
+  const matchBlocks =
+    !selectedDistrict ||
+    (selectedBlocks.length > 0 &&
+      selectedBlocks.some(id => {
+        const block = blocks.find(b => b.id === id);
+        return block && user.geofenceNames?.includes(block.name);
+      }));
 
-    const matchDistrict =
-      !selectedDistrict ||
-      blocks.some(b => user.geofenceNames?.includes(b.name));
+  const matchDistrict =
+    !selectedDistrict ||
+    blocks.some(b => user.geofenceNames?.includes(b.name));
 
-    return matchSearch && matchReporting && matchRoles && matchBlocks && matchDistrict;
-  });
-
+  return matchSearch && matchReporting && matchRoles && matchBlocks && matchDistrict;
+});
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
   const currentUsers = filteredUsers.slice(
     (currentPage - 1) * usersPerPage,
