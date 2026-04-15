@@ -33,24 +33,29 @@ function UsersTable() {
   const usersPerPage = 10;
 
   // USERS
- useEffect(() => {
+  useEffect(() => {
+    setLoading(true);
 
-  if (!selectedDistrict) {
-    setBlocks([]);
-    setSelectedBlocks([]);
-    return;
-  }
+    axios.get("https://user-extract.onrender.com/api/users-summary")
+      .then(res => {
+        setUsers(res.data);
 
-  setBlocksLoading(true);   // 🔥 START LOADING
+        const roleSet = new Set();
+        const reportingSet = new Set();
 
-  axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
-    .then(res => {
-      setBlocks(res.data);
-      setSelectedBlocks(res.data.map(b => b.id)); // default select all
-    })
-    .finally(() => setBlocksLoading(false)); // 🔥 STOP LOADING
+        res.data.forEach(u => {
+          u.roles?.forEach(r => roleSet.add(r));
+          if (u.reportingTo) reportingSet.add(u.reportingTo);
+        });
 
-}, [selectedDistrict]);
+        const rolesArr = [...roleSet];
+        setRoles(rolesArr);
+        setSelectedRoles(rolesArr);
+
+        setReportingList([...reportingSet]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   // DISTRICTS
   useEffect(() => {
@@ -60,17 +65,22 @@ function UsersTable() {
 
   // BLOCKS
   useEffect(() => {
+
     if (!selectedDistrict) {
       setBlocks([]);
       setSelectedBlocks([]);
       return;
     }
 
+    setBlocksLoading(true);
+
     axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
       .then(res => {
         setBlocks(res.data);
-        setSelectedBlocks(res.data.map(b => b.id)); // ✅ default select all
-      });
+        setSelectedBlocks(res.data.map(b => b.id));
+      })
+      .finally(() => setBlocksLoading(false));
+
   }, [selectedDistrict]);
 
   // RESET PAGE
@@ -100,9 +110,7 @@ function UsersTable() {
 
     const matchDistrict =
       !selectedDistrict ||
-      blocks.some(b =>
-        user.geofenceNames?.includes(b.name)
-      );
+      blocks.some(b => user.geofenceNames?.includes(b.name));
 
     return matchSearch && matchReporting && matchRoles && matchBlocks && matchDistrict;
   });
@@ -113,13 +121,11 @@ function UsersTable() {
     currentPage * usersPerPage
   );
 
-  // USER CLICK
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data));
   };
 
-  // DOWNLOAD
   const downloadAll = () => {
     setDownloading(true);
 
@@ -141,7 +147,7 @@ function UsersTable() {
       {loading && (
         <div style={styles.loaderContainer}>
           <div className="spinner"></div>
-          <div>Loading users...</div>
+          <span>Loading users...</span>
         </div>
       )}
 
@@ -219,57 +225,56 @@ function UsersTable() {
           </button>
 
           {showBlockDropdown && (
-  <div style={styles.dropdownMenu}>
+            <div style={styles.dropdownMenu}>
 
-    {/* 🔥 LOADER HERE */}
-    {blocksLoading ? (
-      <div style={styles.loaderContainer}>
-        <div className="spinner"></div>
-        <span>Loading blocks...</span>
-      </div>
-    ) : (
-      <>
-        <div style={styles.dropdownTitle}>Select Blocks</div>
+              {blocksLoading ? (
+                <div style={styles.loaderContainer}>
+                  <div className="spinner"></div>
+                  <span>Loading blocks...</span>
+                </div>
+              ) : (
+                <>
+                  <div style={styles.dropdownTitle}>Select Blocks</div>
 
-        <div style={styles.selectAll}
-          onClick={() => {
-            if (selectedBlocks.length === blocks.length) {
-              setSelectedBlocks([]);
-            } else {
-              setSelectedBlocks(blocks.map(b => b.id));
-            }
-          }}>
-          {selectedBlocks.length === blocks.length ? "Unselect All" : "Select All"}
-        </div>
+                  <div style={styles.selectAll}
+                    onClick={() => {
+                      if (selectedBlocks.length === blocks.length) {
+                        setSelectedBlocks([]);
+                      } else {
+                        setSelectedBlocks(blocks.map(b => b.id));
+                      }
+                    }}>
+                    {selectedBlocks.length === blocks.length ? "Unselect All" : "Select All"}
+                  </div>
 
-        <div style={styles.dropdownList}>
-          {blocks.map(b => (
-            <label key={b.id} style={styles.dropdownItem}>
-              <input
-                type="checkbox"
-                checked={selectedBlocks.includes(b.id)}
-                onChange={() =>
-                  setSelectedBlocks(prev =>
-                    prev.includes(b.id)
-                      ? prev.filter(id => id !== b.id)
-                      : [...prev, b.id]
-                  )
-                }
-              />
-              {b.name}
-            </label>
-          ))}
-        </div>
+                  <div style={styles.dropdownList}>
+                    {blocks.map(b => (
+                      <label key={b.id} style={styles.dropdownItem}>
+                        <input
+                          type="checkbox"
+                          checked={selectedBlocks.includes(b.id)}
+                          onChange={() =>
+                            setSelectedBlocks(prev =>
+                              prev.includes(b.id)
+                                ? prev.filter(id => id !== b.id)
+                                : [...prev, b.id]
+                            )
+                          }
+                        />
+                        {b.name}
+                      </label>
+                    ))}
+                  </div>
 
-        <button style={styles.closeDropdownBtn}
-          onClick={()=>setShowBlockDropdown(false)}>
-          Close
-        </button>
-      </>
-    )}
+                  <button style={styles.closeDropdownBtn}
+                    onClick={()=>setShowBlockDropdown(false)}>
+                    Close
+                  </button>
+                </>
+              )}
 
-  </div>
-)}
+            </div>
+          )}
         </div>
 
         <button style={styles.downloadBtn} onClick={downloadAll}>
@@ -277,75 +282,67 @@ function UsersTable() {
         </button>
 
       </div>
- {/* TABLE */}
+
+      {/* TABLE */}
       <table style={styles.table}>
         <thead>
-  <tr>
-    <th style={styles.th}>Login</th>
-    <th style={styles.th}>Name</th>
-    <th style={styles.th}>Phone</th>
-    <th style={styles.th}>Status</th>
-    <th style={styles.th}>Roles</th>
-    <th style={styles.th}>Version</th>
-    <th style={styles.th}>Reporting</th>
-    <th style={styles.th}>Geofences</th>
-  </tr>
-</thead>
+          <tr>
+            <th style={styles.th}>Login</th>
+            <th style={styles.th}>Name</th>
+            <th style={styles.th}>Phone</th>
+            <th style={styles.th}>Status</th>
+            <th style={styles.th}>Roles</th>
+            <th style={styles.th}>Version</th>
+            <th style={styles.th}>Reporting</th>
+            <th style={styles.th}>Geofences</th>
+          </tr>
+        </thead>
 
         <tbody>
-  {currentUsers.map((u, i) => (
-    <tr
-  key={i}
-  style={styles.tr}
-  onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-  onMouseLeave={(e) => e.currentTarget.style.background = "white"}
-  onClick={() => handleUserClick(u)}
->
+          {currentUsers.map((u, i) => (
+            <tr key={i}
+              style={styles.tr}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "white"}
+              onClick={() => handleUserClick(u)}>
 
-      <td style={styles.td}>{u.login}</td>
-      <td style={styles.td}>{u.name}</td>
-      <td style={styles.td}>{u.phone}</td>
+              <td style={styles.td}>{u.login}</td>
+              <td style={styles.td}>{u.name}</td>
+              <td style={styles.td}>{u.phone}</td>
 
-      <td style={{
-        ...styles.td,
-        color: u.activated ? "green" : "red",
-        fontWeight: "bold"
-      }}>
-        {u.activated ? "Active" : "Inactive"}
-      </td>
+              <td style={{ ...styles.td, color: u.activated ? "green" : "red", fontWeight: "bold" }}>
+                {u.activated ? "Active" : "Inactive"}
+              </td>
 
-      <td style={styles.td}>
-        {u.roles?.map((r, i) => <div key={i}>{r}</div>)}
-      </td>
+              <td style={styles.td}>
+                {u.roles?.map((r, i) => <div key={i}>{r}</div>)}
+              </td>
 
-      <td style={styles.td}>{u.version}</td>
-      <td style={styles.td}>{u.reportingTo}</td>
+              <td style={styles.td}>{u.version}</td>
+              <td style={styles.td}>{u.reportingTo}</td>
 
-      <td
-        style={styles.td}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {u.geofenceNames?.length > 2 ? (
-          <details>
-            <summary>{u.geofenceNames.slice(0, 2).join(", ")}</summary>
-            {u.geofenceNames.map((g, i) => <div key={i}>{g}</div>)}
-          </details>
-        ) : (
-          u.geofenceNames?.map((g, i) => <div key={i}>{g}</div>)
-        )}
-      </td>
+              <td style={styles.td} onClick={(e)=>e.stopPropagation()}>
+                {u.geofenceNames?.length > 2 ? (
+                  <details>
+                    <summary>{u.geofenceNames.slice(0,2).join(", ")}</summary>
+                    {u.geofenceNames.map((g,i)=><div key={i}>{g}</div>)}
+                  </details>
+                ) : u.geofenceNames?.map((g,i)=><div key={i}>{g}</div>)}
+              </td>
 
-    </tr>
-  ))}
-</tbody>
+            </tr>
+          ))}
+        </tbody>
       </table>
 
       {/* PAGINATION */}
       <div style={styles.pagination}>
-  <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.max(p-1,1))}>Prev</button>
-  <span>{currentPage}/{totalPages}</span>
-  <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.min(p+1,totalPages))}>Next</button>
-</div>
+        <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.max(p-1,1))}>Prev</button>
+        <span>{currentPage}/{totalPages}</span>
+        <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.min(p+1,totalPages))}>Next</button>
+      </div>
+
+  
       {/* MODAL */}
 {selectedUser && (
   <div style={styles.modalOverlay}>
