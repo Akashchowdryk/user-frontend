@@ -80,7 +80,7 @@ function UsersTable() {
   // RESET PAGE
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, selectedReportingTo, selectedRoles, selectedBlocks]);
+  }, [search, selectedReportingTo, selectedDistrict, selectedRoles, selectedBlocks]);
 
   // FILTER
   const filteredUsers = users.filter(user => {
@@ -269,138 +269,164 @@ function UsersTable() {
 
       </div>
  {/* TABLE */}
-      <table style={styles.table} border="1" width="100%">
+      <table style={styles.table}>
         <thead>
-          <tr style={styles.row}>
-            <th style={styles.th}>Login</th>
-            <th style={styles.th}>Name</th>
-            <th style={styles.th}>Phone</th>
-            <th style={styles.th}>Status</th>
-            <th style={styles.th}>Roles</th>
-            <th style={styles.th}>Version</th>
-            <th style={styles.th}>Reporting</th>
-            <th style={styles.th}>Geofences</th>
-          </tr>
-        </thead>
+  <tr>
+    <th style={styles.th}>Login</th>
+    <th style={styles.th}>Name</th>
+    <th style={styles.th}>Phone</th>
+    <th style={styles.th}>Status</th>
+    <th style={styles.th}>Roles</th>
+    <th style={styles.th}>Version</th>
+    <th style={styles.th}>Reporting</th>
+    <th style={styles.th}>Geofences</th>
+  </tr>
+</thead>
 
         <tbody>
-          {currentUsers.map((u,i)=>(
-            <tr style={styles.row}key={i} onClick={()=>handleUserClick(u)}>
+  {currentUsers.map((u, i) => (
+    <tr
+  key={i}
+  style={styles.tr}
+  onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
+  onMouseLeave={(e) => e.currentTarget.style.background = "white"}
+  onClick={() => handleUserClick(u)}
+>
 
-              <td style={styles.td}>{u.login}</td>
-              <td style={styles.td}>{u.name}</td>
-              <td style={styles.td}>{u.phone}</td>
+      <td style={styles.td}>{u.login}</td>
+      <td style={styles.td}>{u.name}</td>
+      <td style={styles.td}>{u.phone}</td>
 
-              <td style={{color:u.activated?"green":"red"}}>
-                {u.activated?"Active":"Inactive"}
-              </td>
+      <td style={{
+        ...styles.td,
+        color: u.activated ? "green" : "red",
+        fontWeight: "bold"
+      }}>
+        {u.activated ? "Active" : "Inactive"}
+      </td>
 
-              <td style={styles.td}>{u.roles?.map((r,i)=><div key={i}>{r}</div>)}</td>
+      <td style={styles.td}>
+        {u.roles?.map((r, i) => <div key={i}>{r}</div>)}
+      </td>
 
-              <td style={styles.td}>{u.version}</td>
-              <td style={styles.td}>{u.reportingTo}</td>
+      <td style={styles.td}>{u.version}</td>
+      <td style={styles.td}>{u.reportingTo}</td>
 
-              <td onClick={(e)=>e.stopPropagation()}>
-                {u.geofenceNames?.length>2 ? (
-                  <details>
-                    <summary>{u.geofenceNames.slice(0,2).join(", ")}</summary>
-                    {u.geofenceNames.map((g,i)=><div key={i}>{g}</div>)}
-                  </details>
-                ) : u.geofenceNames?.map((g,i)=><div key={i}>{g}</div>)}
-              </td>
+      <td
+        style={styles.td}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {u.geofenceNames?.length > 2 ? (
+          <details>
+            <summary>{u.geofenceNames.slice(0, 2).join(", ")}</summary>
+            {u.geofenceNames.map((g, i) => <div key={i}>{g}</div>)}
+          </details>
+        ) : (
+          u.geofenceNames?.map((g, i) => <div key={i}>{g}</div>)
+        )}
+      </td>
 
-            </tr>
-          ))}
-        </tbody>
+    </tr>
+  ))}
+</tbody>
       </table>
 
       {/* PAGINATION */}
       <div style={styles.pagination}>
-        <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.max(p-1,1))}>Prev</button>
-        <span>{currentPage}/{totalPages}</span>
-        <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.min(p+1,totalPages))}>Next</button>
+  <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.max(p-1,1))}>Prev</button>
+  <span>{currentPage}/{totalPages}</span>
+  <button style={styles.pageBtn} onClick={()=>setCurrentPage(p=>Math.min(p+1,totalPages))}>Next</button>
+</div>
+      {/* MODAL */}
+{selectedUser && (
+  <div style={styles.modalOverlay}>
+    <div style={styles.modalBox}>
+
+      {/* HEADER */}
+      <div style={styles.modalHeader}>
+        <h3>User Details</h3>
+        <button style={styles.closeBtnSmall} onClick={()=>setSelectedUser(null)}>✖</button>
       </div>
 
-      {/* MODAL */}
-      {selectedUser && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
-            <h3>User Details</h3>
+      {/* CONTENT */}
+      <div style={styles.scrollBox}>
+        <table style={styles.detailTable}>
+          <tbody>
 
-           <div style={styles.scrollBox}>
-              <table style={styles.detailTable}>
-                <tbody>
+            {Object.entries(selectedUser).map(([key, value]) => {
 
-                  {Object.entries(selectedUser).map(([key, value]) => {
+              const hidden = [
+                "geofences","groups","vendors",
+                "trakeyeType","trakeyeTypeAttribute",
+                "trakeyeTypeAttributeValues","vendor"
+              ];
 
-                    const hidden = [
-                      "geofences","groups","vendors",
-                      "trakeyeType","trakeyeTypeAttribute",
-                      "trakeyeTypeAttributeValues","vendor"
-                    ];
+              if (hidden.includes(key)) return null;
 
-                    if (hidden.includes(key)) return null;
+              if (key === "activated") {
+                return (
+                  <tr key={key}>
+                    <td style={styles.key}>Status</td>
+                    <td style={{ color: value ? "green" : "red" }}>
+                      {value ? "Active" : "Inactive"}
+                    </td>
+                  </tr>
+                );
+              }
 
-                    if (key === "activated") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Status</td>
-                          <td style={{ color: value ? "green" : "red" }}>
-                            {value ? "Active" : "Inactive"}
-                          </td>
-                        </tr>
-                      );
-                    }
+              if (key === "authorities") {
+                return (
+                  <tr key={key}>
+                    <td style={styles.key}>Roles</td>
+                    <td>{value?.map((r, i) => <div key={i}>{r}</div>)}</td>
+                  </tr>
+                );
+              }
 
-                    if (key === "authorities") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Roles</td>
-                          <td>{value?.map((r, i) => <div key={i}>{r}</div>)}</td>
-                        </tr>
-                      );
-                    }
+              if (key === "ownedBy") {
+                return (
+                  <tr key={key}>
+                    <td style={styles.key}>Reporting To</td>
+                    <td>{value?.map(v => v.login).join(", ")}</td>
+                  </tr>
+                );
+              }
 
-                    if (key === "ownedBy") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Reporting To</td>
-                          <td>{value?.map(v => v.login).join(", ")}</td>
-                        </tr>
-                      );
-                    }
+              if (key === "geofenceNames") {
+                return (
+                  <tr key={key}>
+                    <td style={styles.key}>Geofences</td>
+                    <td>
+                      {value?.length > 2 ? (
+                        <details onClick={(e)=>e.stopPropagation()}>
+                          <summary>{value.slice(0, 2).join(", ")}</summary>
+                          {value.map((g, i) => <div key={i}>{g}</div>)}
+                        </details>
+                      ) : value?.join(", ")}
+                    </td>
+                  </tr>
+                );
+              }
 
-                    if (key === "geofenceNames") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Geofences</td>
-                          <td>
-                            {value?.length > 2 ? (
-                              <details>
-                                <summary>{value.slice(0, 2).join(", ")}</summary>
-                                {value.map((g, i) => <div key={i}>{g}</div>)}
-                              </details>
-                            ) : value?.join(", ")}
-                          </td>
-                        </tr>
-                      );
-                    }
+              return (
+                <tr key={key}>
+                  <td style={styles.key}>{key}</td>
+                  <td>
+                    {Array.isArray(value)
+                      ? value.join(", ")
+                      : value?.toString()}
+                  </td>
+                </tr>
+              );
+            })}
 
-                    return (
-                      <tr key={key}>
-                        <td style={styles.key}>{key}</td>
-                        <td>{Array.isArray(value) ? value.join(", ") : value?.toString()}</td>
-                      </tr>
-                    );
-                  })}
+          </tbody>
+        </table>
+      </div>
 
-                </tbody>
-              </table>
-            </div>
-            <button style={styles.closeBtn} onClick={()=>setSelectedUser(null)}>Close</button>
-          </div>
-        </div>
-      )}
+    </div>
+  </div>
+)}
     </div>
   );
 }
@@ -418,7 +444,106 @@ const styles = {
   closeDropdownBtn:{marginTop:"5px"},
   downloadBtn:{background:"#2563eb",color:"white",padding:"8px"},
   loaderContainer:{display:"flex",justifyContent:"center",gap:"10px"},
-  spinner:{width:"18px",height:"18px",border:"3px solid #ccc",borderTop:"3px solid blue",borderRadius:"50%"}
+  spinner:{width:"18px",height:"18px",border:"3px solid #ccc",borderTop:"3px solid blue",borderRadius:"50%"},modalOverlay: {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  background: "rgba(0,0,0,0.6)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 9999   // 🔥 IMPORTANT FIX
+},
+
+modalBox: {
+  background: "white",
+  width: "600px",
+  maxHeight: "80vh",
+  borderRadius: "10px",
+  padding: "15px",
+  display: "flex",
+  flexDirection: "column",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+},
+
+modalHeader: {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  borderBottom: "1px solid #eee",
+  marginBottom: "10px"
+},
+
+scrollBox: {
+  overflowY: "auto",
+  maxHeight: "60vh"
+},
+
+detailTable: {
+  width: "100%",
+  borderCollapse: "collapse"
+},
+
+key: {
+  fontWeight: "bold",
+  width: "40%",
+  padding: "8px",
+  borderBottom: "1px solid #eee"
+},
+
+closeBtnSmall: {
+  background: "red",
+  color: "white",
+  border: "none",
+  padding: "4px 8px",
+  fontSize: "12px",
+  borderRadius: "5px",
+  cursor: "pointer"
+},table: {
+  width: "100%",
+  borderCollapse: "collapse",
+  marginTop: "10px",
+  fontSize: "14px"
+},
+
+th: {
+  background: "#f3f4f6",
+  padding: "12px",
+  border: "1px solid #ddd",
+  textAlign: "left",
+  fontWeight: "600"
+},
+
+td: {
+  padding: "10px",
+  border: "1px solid #ddd",
+  verticalAlign: "top"
+},
+
+tr: {
+  cursor: "pointer",
+  transition: "background 0.2s ease"
+},
+
+// hover effect
+trHover: {
+  backgroundColor: "#f9fafb"
+},pagination:{
+  display:"flex",
+  justifyContent:"center",
+  alignItems:"center",
+  gap:"10px",
+  marginTop:"20px"
+},
+
+pageBtn:{
+  padding:"6px 12px",
+  border:"1px solid #ccc",
+  borderRadius:"5px",
+  cursor:"pointer"
+}
 };
 
 export default UsersTable;
