@@ -115,7 +115,12 @@ function UsersTable() {
 
       <h2>User Dashboard</h2>
 
-      {loading && <div>Loading...</div>}
+      {loading && (
+  <div style={styles.loaderContainer}>
+    <div style={styles.spinner}></div>
+    <div>Loading users...</div>
+  </div>
+)}
 
       {/* FILTERS */}
       <div style={styles.filters}>
@@ -152,6 +157,20 @@ function UsersTable() {
       <div style={styles.dropdownMenu}>
 
         <div style={styles.dropdownTitle}>Select Roles</div>
+
+{/* SELECT ALL TOGGLE */}
+<div
+  style={styles.selectAll}
+  onClick={() => {
+    if (selectedRoles.length === roles.length) {
+      setSelectedRoles([]); // unselect all
+    } else {
+      setSelectedRoles(roles); // select all
+    }
+  }}
+>
+  {selectedRoles.length === roles.length ? "Unselect All" : "Select All"}
+</div>
 
         <div style={styles.dropdownList}>
           {roles.map(r => (
@@ -203,11 +222,17 @@ function UsersTable() {
 
         {/* SELECT ALL */}
         <div
-          style={styles.selectAll}
-          onClick={() => setSelectedBlocks(blocks.map(b => b.id))}
-        >
-          Select All
-        </div>
+  style={styles.selectAll}
+  onClick={() => {
+    if (selectedBlocks.length === blocks.length) {
+      setSelectedBlocks([]); // unselect all
+    } else {
+      setSelectedBlocks(blocks.map(b => b.id)); // select all
+    }
+  }}
+>
+  {selectedBlocks.length === blocks.length ? "Unselect All" : "Select All"}
+</div>
 
         <div style={styles.dropdownList}>
           {blocks.map(b => (
@@ -586,6 +611,22 @@ selectAll: {
   color: "#2563eb",
   cursor: "pointer",
   borderBottom: "1px solid #eee"
+},loaderContainer: {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  justifyContent: "center",
+  margin: "20px 0",
+  fontWeight: "bold"
+},
+
+spinner: {
+  width: "18px",
+  height: "18px",
+  border: "3px solid #ccc",
+  borderTop: "3px solid #2563eb",
+  borderRadius: "50%",
+  animation: "spin 1s linear infinite"
 }
 
 };
