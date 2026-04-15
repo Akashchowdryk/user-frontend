@@ -194,25 +194,38 @@ function UsersTable() {
 
       {/* OPTIONS */}
       <div style={styles.dropdownList}>
-        {reportingList
-          .filter(r =>
-            r.toLowerCase().includes(reportSearch.toLowerCase())
-          )
-          .map(r => (
-            <div
-              key={r}
-              style={styles.dropdownItem}
-              onClick={() => {
-                setSelectedReportingTo(r);
-                setShowReportingDropdown(false);
-                setReportSearch("");
-              }}
-            >
-              {r}
-            </div>
-          ))}
-      </div>
 
+  {/* ✅ ALL REPORTING OPTION */}
+  <div
+    style={{ ...styles.dropdownItem, fontWeight: "bold", color: "#2563eb" }}
+    onClick={() => {
+      setSelectedReportingTo("");   // 🔥 reset
+      setShowReportingDropdown(false);
+      setReportSearch("");
+    }}
+  >
+    All Reporting
+  </div>
+
+  {reportingList
+    .filter(r =>
+      r.toLowerCase().includes(reportSearch.toLowerCase())
+    )
+    .map(r => (
+      <div
+        key={r}
+        style={styles.dropdownItem}
+        onClick={() => {
+          setSelectedReportingTo(r);
+          setShowReportingDropdown(false);
+          setReportSearch("");
+        }}
+      >
+        {r}
+      </div>
+    ))}
+
+</div>
       <button
         style={styles.closeDropdownBtn}
         onClick={() => setShowReportingDropdown(false)}
