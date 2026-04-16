@@ -255,9 +255,9 @@ function UsersTable() {
 
     {/* TOP ACTIONS */}
     <div style={styles.dropdownHeader}>
-      <button onClick={() => setSelectedRoles(roles)}>✓ All</button>
-      <button onClick={() => setSelectedRoles([])}>✕ None</button>
-      <button onClick={() => setShowRoleDropdown(false)}>Done</button>
+      <button style={styles.dropdownActionBtn} onClick={() => setSelectedRoles(roles)}>✓ All</button>
+      <button style={styles.dropdownActionBtn} onClick={() => setSelectedRoles([])}>✕ None</button>
+      <button style={styles.dropdownActionBtn} onClick={() => setShowRoleDropdown(false)}>Done</button>
     </div>
 
     {/* SEARCH */}
@@ -317,9 +317,9 @@ function UsersTable() {
       <>
         {/* HEADER */}
         <div style={styles.dropdownHeader}>
-          <button onClick={() => setSelectedBlocks(blocks.map(b => b.id))}>✓ All</button>
-          <button onClick={() => setSelectedBlocks([])}>✕ None</button>
-          <button onClick={() => setShowBlockDropdown(false)}>Done</button>
+          <button style={styles.dropdownActionBtn} onClick={() => setSelectedBlocks(blocks.map(b => b.id))}>✓ All</button>
+          <button style={styles.dropdownActionBtn} onClick={() => setSelectedBlocks([])}>✕ None</button>
+          <button style={styles.dropdownActionBtn} onClick={() => setShowBlockDropdown(false)}>Done</button>
         </div>
 
         {/* SEARCH */}
@@ -525,8 +525,15 @@ const styles = {
   dropdownWrapper:{position:"relative"},
   dropdownBtn:{padding:"8px",border:"1px solid #ccc",cursor:"pointer"},
   dropdownMenu:{position:"absolute",top:"40px",background:"white",border:"1px solid #ccc",padding:"10px"},
-  dropdownList:{maxHeight:"200px",overflowY:"auto"},
-  dropdownItem:{display:"flex",gap:"5px"},
+  dropdownList: {
+  maxHeight: "200px",
+  overflowY: "auto",
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",   // 🔥 2 columns
+  gap: "6px",
+  padding: "5px"
+},
+  dropdownItem:{display:"flex",alignItems:"center",gap:"6px",fontSize:"13px"},
   selectAll:{fontWeight:"bold",color:"blue",cursor:"pointer"},
   closeDropdownBtn:{marginTop:"5px"},
   downloadBtn:{background:"#2563eb",color:"white",padding:"8px"},
@@ -672,12 +679,13 @@ loaderContainer:{
 },
 dropdownHeader: {
   display: "flex",
-  justifyContent: "space-between",
+
   marginBottom: "8px",
-  gap: "5px"
+  gap: "6px"
 },dropdownWrapper: {
   position: "relative",
-  width: "200px"   // 🔥 FIX: give equal width
+  width: "200px"
+  // 🔥 FIX: give equal width
 },
 
 dropdownBtn: {
@@ -699,6 +707,14 @@ dropdownMenu: {
   zIndex: 1000,       // 🔥 prevents overlap issues
   boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
   borderRadius: "6px"
+},
+dropdownActionBtn: {
+  padding: "4px 8px",
+  border: "1px solid #ccc",
+  borderRadius: "4px",
+  cursor: "pointer",
+  fontSize: "12px",
+  background: "#f5f5f5"
 }
 };
 export default UsersTable;
