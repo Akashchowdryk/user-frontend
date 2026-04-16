@@ -20,9 +20,10 @@ function UsersTable() {
   const [blocks, setBlocks] = useState([]);
   const [blocksLoading, setBlocksLoading] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState([]);
-
+  const [blockSearch, selectBlockSearch] = usestate("");
   const [roles, setRoles] = useState([]);
   const [selectedRoles, setSelectedRoles] = useState([]);
+  const [roleSearch, setRoleSearch] = useState("");
 
   const [reportingList, setReportingList] = useState([]);
   const [showReportingDropdown, setShowReportingDropdown] = useState(false);
@@ -239,7 +240,7 @@ function UsersTable() {
 </div>
 
         <select onChange={(e)=>setSelectedDistrict(e.target.value)}>
-          <option value="">District</option>
+          <option value="">All District </option>
           {districts.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
 
@@ -250,104 +251,111 @@ function UsersTable() {
           </button>
 
           {showRoleDropdown && (
-            <div style={styles.dropdownMenu}>
+  <div style={styles.dropdownMenu}>
 
-              <div style={styles.dropdownTitle}>Select Roles</div>
+    {/* TOP ACTIONS */}
+    <div style={styles.dropdownHeader}>
+      <button onClick={() => setSelectedRoles(roles)}>✓ All</button>
+      <button onClick={() => setSelectedRoles([])}>✕ None</button>
+      <button onClick={() => setShowRoleDropdown(false)}>Done</button>
+    </div>
 
-              <div style={styles.selectAll}
-                onClick={() => {
-                  if (selectedRoles.length === roles.length) {
-                    setSelectedRoles([]);
-                  } else {
-                    setSelectedRoles(roles);
-                  }
-                }}>
-                {selectedRoles.length === roles.length ? "Unselect All" : "Select All"}
-              </div>
+    {/* SEARCH */}
+    <input
+      placeholder="Search"
+      value={roleSearch}
+      onChange={(e) => setRoleSearch(e.target.value)}
+      style={styles.input}
+    />
 
-              <div style={styles.dropdownList}>
-                {roles.map(r => (
-                  <label key={r} style={styles.dropdownItem}>
-                    <input
-                      type="checkbox"
-                      checked={selectedRoles.includes(r)}
-                      onChange={() =>
-                        setSelectedRoles(prev =>
-                          prev.includes(r)
-                            ? prev.filter(x => x !== r)
-                            : [...prev, r]
-                        )
-                      }
-                    />
-                    {r}
-                  </label>
-                ))}
-              </div>
+    {/* LIST */}
+    <div style={styles.dropdownList}>
+      {roles
+        .filter(r => r.toLowerCase().includes(roleSearch.toLowerCase()))
+        .map(r => (
+          <label key={r} style={styles.dropdownItem}>
+            <input
+              type="checkbox"
+              checked={selectedRoles.includes(r)}
+              onChange={() =>
+                setSelectedRoles(prev =>
+                  prev.includes(r)
+                    ? prev.filter(x => x !== r)
+                    : [...prev, r]
+                )
+              }
+            />
+            {r}
+          </label>
+        ))}
+    </div>
 
-              <button style={styles.closeDropdownBtn} onClick={()=>setShowRoleDropdown(false)}>Close</button>
+  </div>
+)}
 
-            </div>
-          )}
+              
         </div>
 
         {/* BLOCKS */}
         <div style={styles.dropdownWrapper}>
           
           <button style={styles.dropdownBtn} disabled={blocksLoading} onClick={()=>setShowBlockDropdown(!showBlockDropdown)}>
-            Blocks ({selectedBlocks.length})
+            {selectedBlocks.length === 0 ? "Blocks All" : `Blocks (${selectedBlocks.length})`}
           </button>
 
-          {showBlockDropdown && (
-            <div style={styles.dropdownMenu}>
+          
 
-              {blocksLoading ? (
-                <div style={styles.loaderContainer}>
-                  <div className="spinner"></div>
-                  <span>Loading blocks...</span>
-                </div>
-              ) : (
-                <>
-                  <div style={styles.dropdownTitle}>Select Blocks</div>
+                  {showBlockDropdown && (
+  <div style={styles.dropdownMenu}>
 
-                  <div style={styles.selectAll}
-                    onClick={() => {
-                      if (selectedBlocks.length === blocks.length) {
-                        setSelectedBlocks([]);
-                      } else {
-                        setSelectedBlocks(blocks.map(b => b.id));
-                      }
-                    }}>
-                    {selectedBlocks.length === blocks.length ? "Unselect All" : "Select All"}
-                  </div>
+    {blocksLoading ? (
+      <div style={styles.loaderContainer}>
+        <div className="spinner"></div>
+        <span>Loading blocks...</span>
+      </div>
+    ) : (
+      <>
+        {/* HEADER */}
+        <div style={styles.dropdownHeader}>
+          <button onClick={() => setSelectedBlocks(blocks.map(b => b.id))}>✓ All</button>
+          <button onClick={() => setSelectedBlocks([])}>✕ None</button>
+          <button onClick={() => setShowBlockDropdown(false)}>Done</button>
+        </div>
 
-                  <div style={styles.dropdownList}>
-                    {blocks.map(b => (
-                      <label key={b.id} style={styles.dropdownItem}>
-                        <input
-                          type="checkbox"
-                          checked={selectedBlocks.includes(b.id)}
-                          onChange={() =>
-                            setSelectedBlocks(prev =>
-                              prev.includes(b.id)
-                                ? prev.filter(id => id !== b.id)
-                                : [...prev, b.id]
-                            )
-                          }
-                        />
-                        {b.name}
-                      </label>
-                    ))}
-                  </div>
+        {/* SEARCH */}
+        <input
+          placeholder="Search"
+          value={blockSearch}
+          onChange={(e) => setBlockSearch(e.target.value)}
+          style={styles.input}
+        />
 
-                  <button style={styles.closeDropdownBtn}
-                    onClick={()=>setShowBlockDropdown(false)}>
-                    Close
-                  </button>
-                </>
-              )}
+        {/* LIST */}
+        <div style={styles.dropdownList}>
+          {blocks
+            .filter(b => b.name.toLowerCase().includes(blockSearch.toLowerCase()))
+            .map(b => (
+              <label key={b.id} style={styles.dropdownItem}>
+                <input
+                  type="checkbox"
+                  checked={selectedBlocks.includes(b.id)}
+                  onChange={() =>
+                    setSelectedBlocks(prev =>
+                      prev.includes(b.id)
+                        ? prev.filter(id => id !== b.id)
+                        : [...prev, b.id]
+                    )
+                  }
+                />
+                {b.name}
+              </label>
+            ))}
+        </div>
+      </>
+    )}
 
-            </div>
-          )}
+  </div>
+)}
         </div>
 
         <button style={styles.downloadBtn} onClick={downloadAll}>
@@ -661,6 +669,12 @@ loaderContainer:{
   justifyContent:"center",
   gap:"10px",
   margin:"15px 0"
+},
+dropdownHeader: {
+  display: "flex",
+  justifyContent: "space-between",
+  marginBottom: "8px",
+  gap: "5px"
 }
 };
 export default UsersTable;
