@@ -20,7 +20,7 @@ function UsersTable() {
   const [blocks, setBlocks] = useState([]);
   const [blocksLoading, setBlocksLoading] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState([]);
-  const [blockSearch, selectBlockSearch] = usestate("");
+  const [blockSearch, setBlockSearch] = useState("");
   const [roles, setRoles] = useState([]);
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [roleSearch, setRoleSearch] = useState("");
