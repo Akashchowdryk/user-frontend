@@ -92,10 +92,10 @@ function UsersTable() {
   }, [selectedDistrict]);
   useEffect(() => {
 
-  axios.get("http://localhost:8080/api/edit/roles")
+  axios.get("https://user-extract.onrender.com/api/edit/roles")
     .then(res => setRolesList(res.data));
 
-  axios.get("http://localhost:8080/api/edit/reporting")
+  axios.get("https://user-extract.onrender.com/api/edit/reporting")
     .then(res => setReportingList(res.data));
 
 }, []);
@@ -128,7 +128,7 @@ function UsersTable() {
         : []
     };
 
-    axios.put("http://localhost:8080/api/edit/user", payload)
+    axios.put("https://user-extract.onrender.com/api/edit/user", payload)
       .then(() => {
         alert("Updated Successfully ✅");
         setEditUser(null);
