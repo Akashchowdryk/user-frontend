@@ -94,10 +94,16 @@ function UsersTable() {
   // FILTER
   const filteredUsers = users.length === 0 ? [] : users.filter(user => {
 
-  const matchSearch =
-    user.login?.toLowerCase().includes(search.toLowerCase());
-    user.phone?.toString().includes(search);
-     user.Name?.toLowerCase().includes(search.toLowerCase());
+ const searchText = search.toLowerCase();
+
+const matchSearch =
+  user.login?.toLowerCase().includes(searchText) ||
+
+  (user.name &&
+    user.name.toLowerCase().includes(searchText)) ||
+
+  (user.phone &&
+    user.phone.toString().toLowerCase().includes(searchText));
   const matchReporting =
     !selectedReportingTo || user.reportingTo === selectedReportingTo;
 
