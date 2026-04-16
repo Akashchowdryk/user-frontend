@@ -528,12 +528,12 @@ const styles = {
   dropdownList: {
   maxHeight: "200px",
   overflowY: "auto",
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",   // 🔥 2 columns
+  display: "flex",
+  flexDirection: "column",
   gap: "6px",
   padding: "5px"
 },
-  dropdownItem:{display:"flex",alignItems:"center",gap:"6px",fontSize:"13px"},
+  dropdownItem:{display:"flex",alignItems:"center",gap:"8px",fontSize:"13px",padding:"4px 2px"},
   selectAll:{fontWeight:"bold",color:"blue",cursor:"pointer"},
   closeDropdownBtn:{marginTop:"5px"},
   downloadBtn:{background:"#2563eb",color:"white",padding:"8px"},
