@@ -96,7 +96,8 @@ function UsersTable() {
 
   const matchSearch =
     user.login?.toLowerCase().includes(search.toLowerCase());
-
+    user.phone?.toString().includes(search);
+     user.Name?.toLowerCase().includes(search.toLowerCase());
   const matchReporting =
     !selectedReportingTo || user.reportingTo === selectedReportingTo;
 
@@ -132,17 +133,29 @@ function UsersTable() {
   };
 
   const downloadAll = () => {
-    setDownloading(true);
+  setDownloading(true);
 
-    const ws = XLSX.utils.json_to_sheet(users);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Users");
+  // ✅ Use FILTERED DATA (not raw users)
+  const dataToExport = filteredUsers.map(u => ({
+    Login: u.login,
+    Name: u.name,
+    Phone: u.phone,
+    Status: u.activated ? "Active" : "Inactive",
+    Roles: u.roles?.join(", "),                 // ✅ roles fixed
+    Version: u.version,
+    Reporting: u.reportingTo,
+    Geofences: u.geofenceNames?.join(", ")      // ✅ geofences fixed
+  }));
 
-    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([buffer]), "users.xlsx");
+  const ws = XLSX.utils.json_to_sheet(dataToExport);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Users");
 
-    setDownloading(false);
-  };
+  const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  saveAs(new Blob([buffer]), "Filtered_Users.xlsx");
+
+  setDownloading(false);
+};
 
   return (
     <div style={styles.page}>
@@ -375,7 +388,7 @@ function UsersTable() {
             <th style={styles.th}>Roles</th>
             <th style={styles.th}>Version</th>
             <th style={styles.th}>Reporting</th>
-            <th style={styles.th}>Geofences</th>
+            <th style={styles.th}>Blocks</th>
           </tr>
         </thead>
 
@@ -403,13 +416,16 @@ function UsersTable() {
               <td style={styles.td}>{u.reportingTo}</td>
 
               <td style={styles.td} onClick={(e)=>e.stopPropagation()}>
-                {u.geofenceNames?.length > 2 ? (
-                  <details>
-                    <summary>{u.geofenceNames.slice(0,2).join(", ")}</summary>
-                    {u.geofenceNames.map((g,i)=><div key={i}>{g}</div>)}
-                  </details>
-                ) : u.geofenceNames?.map((g,i)=><div key={i}>{g}</div>)}
-              </td>
+
+  <div style={styles.geoBox}>
+
+    {u.geofenceNames?.map((g,i)=>(
+      <div key={i}>{g}</div>
+    ))}
+
+  </div>
+
+</td>
 
             </tr>
           ))}
@@ -715,6 +731,10 @@ dropdownActionBtn: {
   cursor: "pointer",
   fontSize: "12px",
   background: "#f5f5f5"
+},geoBox: {
+  maxHeight: "60px",        // 🔥 fixed height
+  overflowY: "auto",
+  paddingRight: "5px"
 }
 };
 export default UsersTable;
