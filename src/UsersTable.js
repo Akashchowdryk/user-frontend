@@ -20,7 +20,7 @@ function UsersTable() {
   const [blocks, setBlocks] = useState([]);
   const [blocksLoading, setBlocksLoading] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState([]);
-  const [blockSearch, setBlockSearch] = useState("");
+  const [blockSearch, selectBlockSearch] = usestate("");
   const [roles, setRoles] = useState([]);
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [roleSearch, setRoleSearch] = useState("");
@@ -520,13 +520,13 @@ function UsersTable() {
 
 const styles = {
   page:{padding:"20px"},
-  filters:{display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"flex-start",overflow:"visible"},
+  filters:{display:"flex",gap:"10px",flexWrap:"nowrap",alignItems:"center",overfloewX:"auto"},
   input:{padding:"8px"},
-  dropdownWrapper:{position:"relative",zIndex:100},
-  dropdownBtn:{padding:"8px",border:"1px solid #ccc",cursor:"pointer",backgroundColor:"white"},
-  dropdownMenu:{position:"fixed",background:"white",border:"1px solid #ccc",padding:"10px",zIndex:9999,minWidth:"250px",boxShadow:"0 4px 12px rgba(0,0,0,0.2)"},
-  dropdownList:{maxHeight:"250px",overflowY:"auto"},
-  dropdownItem:{display:"flex",gap:"8px",padding:"8px 0",alignItems:"center"},
+  dropdownWrapper:{position:"relative"},
+  dropdownBtn:{padding:"8px",border:"1px solid #ccc",cursor:"pointer"},
+  dropdownMenu:{position:"absolute",top:"40px",background:"white",border:"1px solid #ccc",padding:"10px"},
+  dropdownList:{maxHeight:"200px",overflowY:"auto"},
+  dropdownItem:{display:"flex",gap:"5px"},
   selectAll:{fontWeight:"bold",color:"blue",cursor:"pointer"},
   closeDropdownBtn:{marginTop:"5px"},
   downloadBtn:{background:"#2563eb",color:"white",padding:"8px"},
