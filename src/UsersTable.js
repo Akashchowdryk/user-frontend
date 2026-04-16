@@ -20,7 +20,7 @@ function UsersTable() {
   const [blocks, setBlocks] = useState([]);
   const [blocksLoading, setBlocksLoading] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState([]);
-  const [blockSearch, selectBlockSearch] = useState("");
+  const [blockSearch, setBlockSearch] = useState("");
   const [roles, setRoles] = useState([]);
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [roleSearch, setRoleSearch] = useState("");
@@ -520,7 +520,7 @@ function UsersTable() {
 
 const styles = {
   page:{padding:"20px"},
-  filters:{display:"flex",gap:"10px",flexWrap:"nowrap",alignItems:"center",overfloewX:"auto"},
+  filters:{display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"center",overfloewX:"auto"},
   input:{padding:"8px"},
   dropdownWrapper:{position:"relative"},
   dropdownBtn:{padding:"8px",border:"1px solid #ccc",cursor:"pointer"},
@@ -675,6 +675,30 @@ dropdownHeader: {
   justifyContent: "space-between",
   marginBottom: "8px",
   gap: "5px"
+},dropdownWrapper: {
+  position: "relative",
+  width: "200px"   // 🔥 FIX: give equal width
+},
+
+dropdownBtn: {
+  width: "100%",   // 🔥 full width button
+  padding: "8px",
+  border: "1px solid #ccc",
+  cursor: "pointer",
+  textAlign: "left"
+},
+
+dropdownMenu: {
+  position: "absolute",
+  top: "100%",        // 🔥 instead of fixed 40px
+  left: 0,
+  width: "100%",      // 🔥 match button width
+  background: "white",
+  border: "1px solid #ccc",
+  padding: "10px",
+  zIndex: 1000,       // 🔥 prevents overlap issues
+  boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
+  borderRadius: "6px"
 }
 };
 export default UsersTable;
