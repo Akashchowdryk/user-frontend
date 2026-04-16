@@ -434,42 +434,64 @@ function UsersTable() {
             <th style={styles.th}>Version</th>
             <th style={styles.th}>Reporting</th>
             <th style={styles.th}>Blocks</th>
+            <th style={styles.th}>Actions</th>
           </tr>
         </thead>
 
         <tbody>
           {currentUsers.map((u, i) => (
             <tr key={i}
-              style={styles.tr}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "white"}
-              onClick={() => handleUserClick(u)}>
+  style={styles.tr}
+  onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
+  onMouseLeave={(e) => e.currentTarget.style.background = "white"}
+>
 
-              <td style={styles.td}>{u.login}</td>
-              <td style={styles.td}>{u.name}</td>
-              <td style={styles.td}>{u.phone}</td>
+  <td style={styles.td}>{u.login}</td>
+  <td style={styles.td}>{u.name}</td>
+  <td style={styles.td}>{u.phone}</td>
 
-              <td style={{ ...styles.td, color: u.activated ? "green" : "red", fontWeight: "bold" }}>
-                {u.activated ? "Active" : "Inactive"}
-              </td>
+  <td style={{ ...styles.td, color: u.activated ? "green" : "red", fontWeight: "bold" }}>
+    {u.activated ? "Active" : "Inactive"}
+  </td>
 
-              <td style={styles.td}>
-                {u.roles?.map((r, i) => <div key={i}>{r}</div>)}
-              </td>
+  <td style={styles.td}>
+    {u.roles?.map((r, i) => <div key={i}>{r}</div>)}
+  </td>
 
-              <td style={styles.td}>{u.version}</td>
-              <td style={styles.td}>{u.reportingTo}</td>
+  <td style={styles.td}>{u.version}</td>
+  <td style={styles.td}>{u.reportingTo}</td>
 
-              <td style={styles.td} onClick={(e)=>e.stopPropagation()}>
-              <td>
-  <button onClick={(e)=>{
-    e.stopPropagation();
-    openEditModal(u);
-  }}>
-    ✏️ Edit
-  </button>
-</td>
+  {/* BLOCKS */}
+  <td style={styles.td}>
+    <div style={styles.geoBox}>
+      {u.geofenceNames?.map((g,i)=>(
+        <div key={i}>{g}</div>
+      ))}
+    </div>
+  </td>
 
+  {/* ACTIONS COLUMN */}
+  <td style={styles.td}>
+
+    <button
+      style={styles.viewBtn}
+      onClick={(e)=>{
+        e.stopPropagation();
+        handleUserClick(u);   // 👁 VIEW
+      }}
+    >
+      👁 View
+    </button>
+
+    <button
+      style={styles.editBtn}
+      onClick={(e)=>{
+        e.stopPropagation();
+        openEditModal(u);     // ✏️ EDIT
+      }}
+    >
+      ✏️ Edit
+    </button>
   <div style={styles.geoBox}>
 
     {u.geofenceNames?.map((g,i)=>(
