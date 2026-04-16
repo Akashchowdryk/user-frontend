@@ -36,11 +36,9 @@ function UsersTable() {
   const usersPerPage = 10;
   const [editUser, setEditUser] = useState(null);
 
-const [rolesList, setRolesList] = useState([]);
-const [reportingList, setReportingList] = useState([]);
-
-const [selectedRolesEdit, setSelectedRolesEdit] = useState([]);
-const [selectedReportingEdit, setSelectedReportingEdit] = useState("");
+  const [rolesList, setRolesList] = useState([]);
+  const [selectedRolesEdit, setSelectedRolesEdit] = useState([]);
+  const [selectedReportingEdit, setSelectedReportingEdit] = useState("");
 
   // USERS
   useEffect(() => {
