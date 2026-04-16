@@ -34,6 +34,13 @@ function UsersTable() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
+  const [editUser, setEditUser] = useState(null);
+
+const [rolesList, setRolesList] = useState([]);
+const [reportingList, setReportingList] = useState([]);
+
+const [selectedRolesEdit, setSelectedRolesEdit] = useState([]);
+const [selectedReportingEdit, setSelectedReportingEdit] = useState("");
 
   // USERS
   useEffect(() => {
@@ -85,6 +92,15 @@ function UsersTable() {
       .finally(() => setBlocksLoading(false));
 
   }, [selectedDistrict]);
+  useEffect(() => {
+
+  axios.get("http://localhost:8080/api/edit/roles")
+    .then(res => setRolesList(res.data));
+
+  axios.get("http://localhost:8080/api/edit/reporting")
+    .then(res => setReportingList(res.data));
+
+}, []);
 
   // RESET PAGE
   useEffect(() => {
@@ -95,6 +111,13 @@ function UsersTable() {
   const filteredUsers = users.length === 0 ? [] : users.filter(user => {
 
  const searchText = search.toLowerCase();
+ const openEditModal = (user) => {
+
+  setEditUser(user);
+
+  setSelectedRolesEdit(user.roles || []);
+  setSelectedReportingEdit(user.reportingTo || "");
+};
 
 const matchSearch =
   user.login?.toLowerCase().includes(searchText) ||
@@ -140,6 +163,29 @@ const matchSearch =
 
   const downloadAll = () => {
   setDownloading(true);
+  const handleUpdate = () => {
+
+  const payload = {
+    ...editUser,
+
+    authorities: selectedRolesEdit,
+
+    ownedBy: selectedReportingEdit
+      ? [{ login: selectedReportingEdit }]
+      : []
+  };
+
+  axios.put("http://localhost:8080/api/edit/user", payload)
+    .then(() => {
+      alert("Updated Successfully ✅");
+      setEditUser(null);
+      window.location.reload();
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Update Failed ❌");
+    });
+};
 
   // ✅ Use FILTERED DATA (not raw users)
   const dataToExport = filteredUsers.map(u => ({
@@ -422,6 +468,14 @@ const matchSearch =
               <td style={styles.td}>{u.reportingTo}</td>
 
               <td style={styles.td} onClick={(e)=>e.stopPropagation()}>
+              <td>
+  <button onClick={(e)=>{
+    e.stopPropagation();
+    openEditModal(u);
+  }}>
+    ✏️ Edit
+  </button>
+</td>
 
   <div style={styles.geoBox}>
 
@@ -531,6 +585,83 @@ const matchSearch =
 
           </tbody>
         </table>
+      </div>
+
+    </div>
+  </div>
+)}
+{editUser && (
+  <div style={styles.modalOverlay}>
+    <div style={styles.modalBox}>
+
+      <h3>Edit User</h3>
+
+      {/* FIRST NAME */}
+      <input
+        value={editUser.firstName}
+        onChange={(e)=>setEditUser({...editUser, firstName:e.target.value})}
+        placeholder="First Name"
+      />
+
+      {/* LAST NAME */}
+      <input
+        value={editUser.lastName}
+        onChange={(e)=>setEditUser({...editUser, lastName:e.target.value})}
+        placeholder="Last Name"
+      />
+
+      {/* PHONE */}
+      <input
+        value={editUser.phone}
+        onChange={(e)=>setEditUser({...editUser, phone:e.target.value})}
+        placeholder="Phone"
+      />
+
+      {/* EMAIL */}
+      <input
+        value={editUser.email}
+        onChange={(e)=>setEditUser({...editUser, email:e.target.value})}
+        placeholder="Email"
+      />
+
+      {/* ROLES */}
+      <div>
+        <h4>Roles</h4>
+        {rolesList.map(r => (
+          <label key={r.name}>
+            <input
+              type="checkbox"
+              checked={selectedRolesEdit.includes(r.name)}
+              onChange={() => {
+                setSelectedRolesEdit(prev =>
+                  prev.includes(r.name)
+                    ? prev.filter(x => x !== r.name)
+                    : [...prev, r.name]
+                );
+              }}
+            />
+            {r.name}
+          </label>
+        ))}
+      </div>
+
+      {/* REPORTING */}
+      <select
+        value={selectedReportingEdit}
+        onChange={(e)=>setSelectedReportingEdit(e.target.value)}
+      >
+        <option value="">Select Reporting</option>
+        {reportingList.map(r => (
+          <option key={r.login} value={r.login}>
+            {r.login}
+          </option>
+        ))}
+      </select>
+
+      {/* BUTTONS */}
+      <div style={{marginTop:"10px"}}>
+        <button onClick={handleUpdate}>Save</button>
+        <button onClick={()=>setEditUser(null)}>Cancel</button>
       </div>
 
     </div>
@@ -671,6 +802,12 @@ trHover: {
   alignItems:"center",
   gap:"10px",
   marginTop:"20px"
+},
+modalBox: {
+  background: "white",
+  padding: "20px",
+  borderRadius: "10px",
+  width: "400px"
 },
 
 pageBtn:{
