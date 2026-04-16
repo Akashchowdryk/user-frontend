@@ -105,107 +105,102 @@ function UsersTable() {
     setCurrentPage(1);
   }, [search, selectedReportingTo, selectedDistrict, selectedRoles, selectedBlocks]);
 
-  // FILTER
-  const filteredUsers = users.length === 0 ? [] : users.filter(user => {
+  // OPEN EDIT MODAL
+  const openEditModal = (user) => {
+    setEditUser(user);
+    setSelectedRolesEdit(user.roles || []);
+    setSelectedReportingEdit(user.reportingTo || "");
+  };
 
- const searchText = search.toLowerCase();
- const openEditModal = (user) => {
-
-  setEditUser(user);
-
-  setSelectedRolesEdit(user.roles || []);
-  setSelectedReportingEdit(user.reportingTo || "");
-};
-
-const matchSearch =
-  user.login?.toLowerCase().includes(searchText) ||
-
-  (user.name &&
-    user.name.toLowerCase().includes(searchText)) ||
-
-  (user.phone &&
-    user.phone.toString().toLowerCase().includes(searchText));
-  const matchReporting =
-    !selectedReportingTo || user.reportingTo === selectedReportingTo;
-
-  const matchRoles =
-    selectedRoles.length === 0 ||
-    selectedRoles.some(r => user.roles?.includes(r));
-    
-
-  const matchBlocks =
-    !selectedDistrict ||
-    (selectedBlocks.length > 0 &&
-      selectedBlocks.some(id => {
-        const block = blocks.find(b => b.id === id);
-        return block && user.geofenceNames?.includes(block.name);
-      }));
-
-
-  const matchDistrict =
-    !selectedDistrict ||
-    blocks.some(b => user.geofenceNames?.includes(b.name));
-
-  return matchSearch && matchReporting && matchRoles && matchBlocks && matchDistrict;
-});
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
-  const currentUsers = filteredUsers.slice(
-    (currentPage - 1) * usersPerPage,
-    currentPage * usersPerPage
-  );
-
+  // HANDLE USER CLICK
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data));
   };
 
-  const downloadAll = () => {
-  setDownloading(true);
+  // HANDLE UPDATE
   const handleUpdate = () => {
+    const payload = {
+      ...editUser,
+      authorities: selectedRolesEdit,
+      ownedBy: selectedReportingEdit
+        ? [{ login: selectedReportingEdit }]
+        : []
+    };
 
-  const payload = {
-    ...editUser,
-
-    authorities: selectedRolesEdit,
-
-    ownedBy: selectedReportingEdit
-      ? [{ login: selectedReportingEdit }]
-      : []
+    axios.put("http://localhost:8080/api/edit/user", payload)
+      .then(() => {
+        alert("Updated Successfully ✅");
+        setEditUser(null);
+        window.location.reload();
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Update Failed ❌");
+      });
   };
 
-  axios.put("http://localhost:8080/api/edit/user", payload)
-    .then(() => {
-      alert("Updated Successfully ✅");
-      setEditUser(null);
-      window.location.reload();
-    })
-    .catch(err => {
-      console.error(err);
-      alert("Update Failed ❌");
-    });
-};
+  // DOWNLOAD ALL
+  const downloadAll = () => {
+    setDownloading(true);
+    
+    const dataToExport = filteredUsers.map(u => ({
+      Login: u.login,
+      Name: u.name,
+      Phone: u.phone,
+      Status: u.activated ? "Active" : "Inactive",
+      Roles: u.roles?.join(", "),
+      Version: u.version,
+      Reporting: u.reportingTo,
+      Geofences: u.geofenceNames?.join(", ")
+    }));
 
-  // ✅ Use FILTERED DATA (not raw users)
-  const dataToExport = filteredUsers.map(u => ({
-    Login: u.login,
-    Name: u.name,
-    Phone: u.phone,
-    Status: u.activated ? "Active" : "Inactive",
-    Roles: u.roles?.join(", "),                 // ✅ roles fixed
-    Version: u.version,
-    Reporting: u.reportingTo,
-    Geofences: u.geofenceNames?.join(", ")      // ✅ geofences fixed
-  }));
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Users");
 
-  const ws = XLSX.utils.json_to_sheet(dataToExport);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Users");
+    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    saveAs(new Blob([buffer]), "Filtered_Users.xlsx");
 
-  const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-  saveAs(new Blob([buffer]), "Filtered_Users.xlsx");
+    setDownloading(false);
+  };
 
-  setDownloading(false);
-};
+  // FILTER
+  const filteredUsers = users.length === 0 ? [] : users.filter(user => {
+    const searchText = search.toLowerCase();
+    
+    const matchSearch =
+      user.login?.toLowerCase().includes(searchText) ||
+      (user.name && user.name.toLowerCase().includes(searchText)) ||
+      (user.phone && user.phone.toString().toLowerCase().includes(searchText));
+
+    const matchReporting =
+      !selectedReportingTo || user.reportingTo === selectedReportingTo;
+
+    const matchRoles =
+      selectedRoles.length === 0 ||
+      selectedRoles.some(r => user.roles?.includes(r));
+
+    const matchBlocks =
+      !selectedDistrict ||
+      (selectedBlocks.length > 0 &&
+        selectedBlocks.some(id => {
+          const block = blocks.find(b => b.id === id);
+          return block && user.geofenceNames?.includes(block.name);
+        }));
+
+    const matchDistrict =
+      !selectedDistrict ||
+      blocks.some(b => user.geofenceNames?.includes(b.name));
+
+    return matchSearch && matchReporting && matchRoles && matchBlocks && matchDistrict;
+  });
+
+  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  const currentUsers = filteredUsers.slice(
+    (currentPage - 1) * usersPerPage,
+    currentPage * usersPerPage
+  );
 
   return (
     <div style={styles.page}>
@@ -670,212 +665,37 @@ const matchSearch =
 }
 
 const styles = {
-  page:{padding:"20px"},
-  filters:{display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"center",overfloewX:"auto"},
-  input:{padding:"8px"},
-  dropdownWrapper:{position:"relative"},
-  dropdownBtn:{padding:"8px",border:"1px solid #ccc",cursor:"pointer"},
-  dropdownMenu:{position:"absolute",top:"40px",background:"white",border:"1px solid #ccc",padding:"10px"},
-  dropdownList: {
-  maxHeight: "200px",
-  overflowY: "auto",
-  display: "flex",
-  flexDirection: "column",
-  gap: "6px",
-  padding: "5px"
-},
-  dropdownItem:{display:"flex",alignItems:"center",gap:"8px",fontSize:"13px",padding:"4px 2px"},
-  selectAll:{fontWeight:"bold",color:"blue",cursor:"pointer"},
-  closeDropdownBtn:{marginTop:"5px"},
-  downloadBtn:{background:"#2563eb",color:"white",padding:"8px"},
-  loaderContainer:{display:"flex",justifyContent:"center",gap:"10px"},
-  spinner:{width:"18px",height:"18px",border:"3px solid #ccc",borderTop:"3px solid blue",borderRadius:"50%"},modalOverlay: {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: "rgba(0,0,0,0.6)",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  zIndex: 9999   // 🔥 IMPORTANT FIX
-},
-
-modalBox: {
-  background: "white",
-  width: "600px",
-  maxHeight: "80vh",
-  borderRadius: "10px",
-  padding: "15px",
-  display: "flex",
-  flexDirection: "column",
-  boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
-},
-
-modalHeader: {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  borderBottom: "1px solid #eee",
-  marginBottom: "10px"
-},
-loaderContainer:{
-  display:"flex",
-  alignItems:"center",
-  justifyContent:"center",
-  gap:"10px",
-  margin:"15px 0"
-},
-
-
-scrollBox: {
-  overflowY: "auto",
-  maxHeight: "60vh"
-},
-
-detailTable: {
-  width: "100%",
-  borderCollapse: "collapse"
-},
-dropdownItem: {
-  padding: "6px",
-  cursor: "pointer"
-},
-
-input: {
-  padding: "8px",
-  width: "180px",
-  marginBottom: "5px",
-  border: "1px solid #ccc",
-  borderRadius: "5px"
-},
-key: {
-  fontWeight: "bold",
-  width: "40%",
-  padding: "8px",
-  borderBottom: "1px solid #eee"
-},
-
-closeBtnSmall: {
-  background: "red",
-  color: "white",
-  border: "none",
-  padding: "4px 8px",
-  fontSize: "12px",
-  borderRadius: "5px",
-  cursor: "pointer"
-},table: {
-  width: "100%",
-  borderCollapse: "collapse",
-  marginTop: "10px",
-  fontSize: "14px"
-},
-
-th: {
-  background: "#f3f4f6",
-  padding: "12px",
-  border: "1px solid #ddd",
-  textAlign: "left",
-  fontWeight: "600"
-},
-
-td: {
-  padding: "10px",
-  border: "1px solid #ddd",
-  verticalAlign: "top"
-},
-
-tr: {
-  cursor: "pointer",
-  transition: "background 0.2s ease"
-},
-
-// hover effect
-trHover: {
-  backgroundColor: "#f9fafb"
-},pagination:{
-  display:"flex",
-  justifyContent:"center",
-  alignItems:"center",
-  gap:"10px",
-  marginTop:"20px"
-},
-modalBox: {
-  background: "white",
-  padding: "20px",
-  borderRadius: "10px",
-  width: "400px"
-},
-
-pageBtn:{
-  padding:"6px 12px",
-  border:"1px solid #ccc",
-  borderRadius:"5px",
-  cursor:"pointer"
-},
-input: {
-  padding: "8px",
-  width: "180px",
-  marginBottom: "5px",
-  border: "1px solid #ccc",
-  borderRadius: "5px"
-},
-
-dropdownItem: {
-  padding: "6px",
-  cursor: "pointer"
-},
-
-loaderContainer:{
-  display:"flex",
-  alignItems:"center",
-  justifyContent:"center",
-  gap:"10px",
-  margin:"15px 0"
-},
-dropdownHeader: {
-  display: "flex",
-
-  marginBottom: "8px",
-  gap: "6px"
-},dropdownWrapper: {
-  position: "relative",
-  width: "200px"
-  // 🔥 FIX: give equal width
-},
-
-dropdownBtn: {
-  width: "100%",   // 🔥 full width button
-  padding: "8px",
-  border: "1px solid #ccc",
-  cursor: "pointer",
-  textAlign: "left"
-},
-
-dropdownMenu: {
-  position: "absolute",
-  top: "100%",        // 🔥 instead of fixed 40px
-  left: 0,
-  width: "100%",      // 🔥 match button width
-  background: "white",
-  border: "1px solid #ccc",
-  padding: "10px",
-  zIndex: 1000,       // 🔥 prevents overlap issues
-  boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
-  borderRadius: "6px"
-},
-dropdownActionBtn: {
-  padding: "4px 8px",
-  border: "1px solid #ccc",
-  borderRadius: "4px",
-  cursor: "pointer",
-  fontSize: "12px",
-  background: "#f5f5f5"
-},geoBox: {
-  maxHeight: "60px",        // 🔥 fixed height
-  overflowY: "auto",
-  paddingRight: "5px"
-}
+  page: { padding: "20px" },
+  filters: { display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", overflowX: "auto" },
+  input: { padding: "8px", width: "180px", marginBottom: "5px", border: "1px solid #ccc", borderRadius: "5px" },
+  dropdownWrapper: { position: "relative", width: "200px" },
+  dropdownBtn: { width: "100%", padding: "8px", border: "1px solid #ccc", cursor: "pointer", textAlign: "left" },
+  dropdownMenu: { position: "absolute", top: "100%", left: 0, width: "100%", background: "white", border: "1px solid #ccc", padding: "10px", zIndex: 1000, boxShadow: "0 4px 8px rgba(0,0,0,0.1)", borderRadius: "6px" },
+  dropdownList: { maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "6px", padding: "5px" },
+  dropdownItem: { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", padding: "6px", cursor: "pointer" },
+  dropdownHeader: { display: "flex", marginBottom: "8px", gap: "6px" },
+  dropdownActionBtn: { padding: "4px 8px", border: "1px solid #ccc", borderRadius: "4px", cursor: "pointer", fontSize: "12px", background: "#f5f5f5" },
+  selectAll: { fontWeight: "bold", color: "blue", cursor: "pointer" },
+  closeDropdownBtn: { marginTop: "5px" },
+  downloadBtn: { background: "#2563eb", color: "white", padding: "8px" },
+  loaderContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", margin: "15px 0" },
+  spinner: { width: "18px", height: "18px", border: "3px solid #ccc", borderTop: "3px solid blue", borderRadius: "50%" },
+  
+  modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999 },
+  modalBox: { background: "white", width: "600px", maxHeight: "80vh", borderRadius: "10px", padding: "15px", display: "flex", flexDirection: "column", boxShadow: "0 4px 12px rgba(0,0,0,0.3)" },
+  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #eee", marginBottom: "10px" },
+  closeBtnSmall: { background: "red", color: "white", border: "none", padding: "4px 8px", fontSize: "12px", borderRadius: "5px", cursor: "pointer" },
+  scrollBox: { overflowY: "auto", maxHeight: "60vh" },
+  detailTable: { width: "100%", borderCollapse: "collapse" },
+  key: { fontWeight: "bold", width: "40%", padding: "8px", borderBottom: "1px solid #eee" },
+  
+  table: { width: "100%", borderCollapse: "collapse", marginTop: "10px", fontSize: "14px" },
+  th: { background: "#f3f4f6", padding: "12px", border: "1px solid #ddd", textAlign: "left", fontWeight: "600" },
+  td: { padding: "10px", border: "1px solid #ddd", verticalAlign: "top" },
+  tr: { cursor: "pointer", transition: "background 0.2s ease" },
+  geoBox: { maxHeight: "60px", overflowY: "auto", paddingRight: "5px" },
+  
+  pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", marginTop: "20px" },
+  pageBtn: { padding: "6px 12px", border: "1px solid #ccc", borderRadius: "5px", cursor: "pointer" }
 };
 export default UsersTable;
