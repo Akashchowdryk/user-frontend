@@ -259,7 +259,13 @@ function UsersTable() {
       phone: editUser.phone || "",
       gpsimei: editUser.gpsimei || "",
       activated: editUser.activated ?? true,
-      authorities: selectedRolesEdit || [],
+      authorities: selectedRolesEdit.map(r => {
+  if (typeof r === "string") return r;
+  return r?.configValue || r?.name || "";
+}),
+authorities: selectedRolesEdit
+  .map(r => typeof r === "string" ? r : r?.configValue || r?.name)
+  .filter(Boolean),
       geofences: selectedBlocks,
       reportingTo: selectedReportingEdit?.id || null,
       langKey: editUser.langKey || "en"
