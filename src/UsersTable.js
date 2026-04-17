@@ -204,7 +204,12 @@ function UsersTable() {
         // Fetch Roles
         axios.get("https://user-extract.onrender.com/api/roles")
           .then(res => {
-            setRolesList(res.data || []);
+            console.log("ROLES API RESPONSE:", res.data);
+            setRolesList(Array.isArray(res.data) ? res.data : []);
+          })
+          .catch(err => {
+            console.error("Error loading roles:", err);
+            setRolesList([]);
           })
           .finally(() => setLoadingRoles(false));
 
@@ -259,13 +264,11 @@ function UsersTable() {
       phone: editUser.phone || "",
       gpsimei: editUser.gpsimei || "",
       activated: editUser.activated ?? true,
-      authorities: selectedRolesEdit.map(r => {
-  if (typeof r === "string") return r;
-  return r?.configValue || r?.name || "";
-}),
-authorities: selectedRolesEdit
-  .map(r => typeof r === "string" ? r : r?.configValue || r?.name)
-  .filter(Boolean),
+      authorities: Array.isArray(selectedRolesEdit)
+        ? selectedRolesEdit
+            .map(r => typeof r === "string" ? r : r?.configValue || r?.name || "")
+            .filter(Boolean)
+        : [],
       geofences: selectedBlocks,
       reportingTo: selectedReportingEdit?.id || null,
       langKey: editUser.langKey || "en"
@@ -783,30 +786,32 @@ authorities: selectedRolesEdit
                 <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>Roles</label>
                 <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px", backgroundColor: "#fafafa" }}>
                   {Array.isArray(rolesList) && rolesList.length > 0 ? (
-  rolesList.map(r => {
-    const roleName = r?.configValue || r?.name || "";
+                    rolesList.map((r, idx) => {
+                      // Extract role name from different possible structures
+                      const roleId = r.id || r.name || idx;
+                      const roleName = r.configValue || r.name || r.value || "";
 
-    return (
-      <label key={r.id || roleName} style={{ display: "block", marginBottom: "8px" }}>
-        <input
-          type="checkbox"
-          checked={Array.isArray(selectedRolesEdit) && selectedRolesEdit.includes(roleName)}
-          onChange={() => {
-            setSelectedRolesEdit(prev => {
-              const safePrev = Array.isArray(prev) ? prev : [];
-              return safePrev.includes(roleName)
-                ? safePrev.filter(x => x !== roleName)
-                : [...safePrev, roleName];
-            });
-          }}
-        />
-        {roleName}
-      </label>
-    );
-  })
-) : (
-  <p style={{ color: "#999" }}>Loading roles...</p>
-)}
+                      return (
+                        <label key={roleId} style={{ display: "block", marginBottom: "8px", cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={Array.isArray(selectedRolesEdit) && selectedRolesEdit.includes(roleName)}
+                            onChange={() => {
+                              setSelectedRolesEdit(prev => {
+                                const safePrev = Array.isArray(prev) ? prev : [];
+                                return safePrev.includes(roleName)
+                                  ? safePrev.filter(x => x !== roleName)
+                                  : [...safePrev, roleName];
+                              });
+                            }}
+                          />
+                          {roleName || "(unnamed)"}
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <p style={{ color: "#999" }}>Loading roles...</p>
+                  )}
                 </div>
               </div>
 
