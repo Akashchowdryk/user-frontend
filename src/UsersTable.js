@@ -123,16 +123,15 @@ const matchSearch =
 
   const matchBlocks =
     !selectedDistrict ||
-    (selectedBlocks.length > 0 &&
+    (Array.isArray(selectedBlocks) && selectedBlocks.length > 0 &&
       selectedBlocks.some(id => {
-       const block = blocks.find(b => b.id === id);
-return block && block.name && user.geofenceNames?.includes(block.name);
+        const block = Array.isArray(blocks) && blocks.find(b => b.id === id);
+        return block && block.name && user.geofenceNames?.includes(block.name);
       }));
-
 
   const matchDistrict =
     !selectedDistrict ||
-    blocks.some(b => user.geofenceNames?.includes(b.name));
+    (Array.isArray(blocks) && blocks.some(b => user.geofenceNames?.includes(b.name)));
 
   return matchSearch && matchReporting && matchRoles && matchBlocks && matchDistrict;
 });
@@ -187,8 +186,8 @@ return block && block.name && user.geofenceNames?.includes(block.name);
       axios.get("https://user-extract.onrender.com/api/geofences")
         .then(res => {
           setBlocks(Array.isArray(res.data) ? res.data : []);
+          console.log("BLOCKS LOADED:", res.data);
         });
-        console.log("FULL USER:", res.data);
 
     })
     .catch(err => {
@@ -455,7 +454,7 @@ const handleUpdate = async () => {
       <>
         {/* HEADER */}
         <div style={styles.dropdownHeader}>
-          <button style={styles.dropdownActionBtn} onClick={() => setSelectedBlocks(blocks.map(b => b.id))}>✓ All</button>
+          <button style={styles.dropdownActionBtn} onClick={() => setSelectedBlocks(Array.isArray(blocks) ? blocks.map(b => b.id) : [])}>✓ All</button>
           <button style={styles.dropdownActionBtn} onClick={() => setSelectedBlocks([])}>✕ None</button>
           <button style={styles.dropdownActionBtn} onClick={() => setShowBlockDropdown(false)}>Done</button>
         </div>
@@ -784,11 +783,12 @@ const handleUpdate = async () => {
       type="checkbox"
       checked={Array.isArray(selectedRolesEdit) && selectedRolesEdit.includes(r)}
       onChange={() => {
-        setSelectedRolesEdit(prev =>
-          prev.includes(r)
-            ? prev.filter(x => x !== r)
-            : [...prev, r]
-        );
+        setSelectedRolesEdit(prev => {
+          const safePrev = Array.isArray(prev) ? prev : [];
+          return safePrev.includes(r)
+            ? safePrev.filter(x => x !== r)
+            : [...safePrev, r];
+        });
       }}
     />
     {r}
