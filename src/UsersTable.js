@@ -125,8 +125,8 @@ const matchSearch =
     !selectedDistrict ||
     (selectedBlocks.length > 0 &&
       selectedBlocks.some(id => {
-        const block = blocks.find(b => b.id === id);
-        return block && user.geofenceNames?.includes(block.name);
+       const block = blocks.find(b => b.id === id);
+return block && block.name && user.geofenceNames?.includes(block.name);
       }));
 
 
@@ -485,7 +485,7 @@ const handleUpdate = async () => {
                     )
                   }
                 />
-                {b.name}
+                {b.name || "No name"}
               </label>
             ))}
         </div>
@@ -756,14 +756,15 @@ const handleUpdate = async () => {
                     type="checkbox"
                     checked={Array.isArray(selectedBlocks) && selectedBlocks.includes(b.id)}
                     onChange={() =>
-                      setSelectedBlocks(prev =>
-                        prev.includes(b.id)
-                          ? prev.filter(id => id !== b.id)
-                          : [...prev, b.id]
-                      )
+                     setSelectedBlocks(prev => {
+  const safePrev = Array.isArray(prev) ? prev : [];
+  return safePrev.includes(b.id)
+    ? safePrev.filter(id => id !== b.id)
+    : [...safePrev, b.id];
+})
                     }
                   />
-                  {b.name}
+                  {b.name || "No name"}
                 </label>
               ))
             ) : (
