@@ -219,7 +219,7 @@ const handleUpdate = async () => {
     authorities: selectedRolesEdit || [],
 
     // ✅ Geofences (IMPORTANT FIX)
-    geofences: selectedBlocks.map(id => ({ id })),
+    geofences: selectedBlocks,
 
     // ✅ Reporting
     ownedBy: selectedReportingEdit
@@ -777,7 +777,7 @@ const handleUpdate = async () => {
           <div style={{maxHeight: "150px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px", backgroundColor: "#fafafa"}}>
             {Array.isArray(rolesList) && rolesList.length > 0 ? (
               rolesList.map(r => (
-                <label key={r.name} style={{display: "block", marginBottom: "8px", cursor: "pointer"}}>
+                <label key={r} style={{display: "block", marginBottom: "8px", cursor: "pointer"}}>
                   <input
                     type="checkbox"
                     checked={selectedRolesEdit.includes(r.name)}
