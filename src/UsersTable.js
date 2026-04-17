@@ -270,9 +270,7 @@ function UsersTable() {
             .filter(Boolean)
         : [],
       geofences: selectedBlocks,
-      reportingTo: selectedReportingEdit
-  ? { id: selectedReportingEdit.id }
-  : null,
+      reportingTo: selectedReportingEdit?.id || null,
       langKey: editUser.langKey || "en"
     };
 
