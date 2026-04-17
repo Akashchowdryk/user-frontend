@@ -3,6 +3,16 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
+// ✅ SAFE HELPER: ensures a block is valid and has a plain string name
+const isValidBlock = (b) =>
+  b &&
+  b.id !== undefined &&
+  b.id !== null &&
+  b.name !== undefined &&
+  b.name !== null &&
+  typeof b.name === "string" &&
+  b.name.trim() !== "";
+
 function UsersTable() {
 
   const [users, setUsers] = useState([]);
@@ -43,16 +53,6 @@ function UsersTable() {
 
   const [selectedRolesEdit, setSelectedRolesEdit] = useState([]);
   const [selectedReportingEdit, setSelectedReportingEdit] = useState(null);
-
-  // ✅ SAFE HELPER: ensures a block is valid and has a plain string name
-  const isValidBlock = (b) =>
-    b &&
-    b.id !== undefined &&
-    b.id !== null &&
-    b.name !== undefined &&
-    b.name !== null &&
-    typeof b.name === "string" &&
-    b.name.trim() !== "";
 
   // ✅ SAFE HELPER: safely get block name as string
   const safeBlockName = (b) => {
@@ -201,6 +201,20 @@ function UsersTable() {
           : [];
         setSelectedBlocks(geoIds);
 
+        // Fetch Blocks for edit modal
+        axios.get("https://user-extract.onrender.com/api/geofences")
+          .then(res => {
+            const validBlocks = Array.isArray(res.data)
+              ? res.data.filter(isValidBlock)
+              : [];
+            setBlocks(validBlocks);
+            console.log("BLOCKS LOADED FOR EDIT:", validBlocks.length);
+          })
+          .catch(err => {
+            console.error("Error loading blocks:", err);
+            setBlocks([]);
+          });
+
         // Fetch Roles
         axios.get("https://user-extract.onrender.com/api/roles")
           .then(res => {
@@ -278,7 +292,25 @@ function UsersTable() {
   const updatedUser = editUser;
 
   setEditUser(null);
-  setSelectedBlocks([]);
+
+  // Restore district blocks or clear if no district selected
+  if (selectedDistrict) {
+    axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
+      .then(res => {
+        const validBlocks = Array.isArray(res.data)
+          ? res.data.filter(isValidBlock)
+          : [];
+        setBlocks(validBlocks);
+        setSelectedBlocks(validBlocks.map(b => b.id));
+      })
+      .catch(() => {
+        setBlocks([]);
+        setSelectedBlocks([]);
+      });
+  } else {
+    setBlocks([]);
+    setSelectedBlocks([]);
+  }
 
   setUsers(prevUsers =>
     prevUsers.map(u =>
@@ -700,7 +732,27 @@ function UsersTable() {
 
             <div style={styles.modalHeader}>
               <h3>Edit User</h3>
-              <button style={styles.closeBtnSmall} onClick={() => { setEditUser(null); setSelectedBlocks([]); }}>✖</button>
+              <button style={styles.closeBtnSmall} onClick={() => {
+                setEditUser(null);
+                // Restore district blocks or clear if no district selected
+                if (selectedDistrict) {
+                  axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
+                    .then(res => {
+                      const validBlocks = Array.isArray(res.data)
+                        ? res.data.filter(isValidBlock)
+                        : [];
+                      setBlocks(validBlocks);
+                      setSelectedBlocks(validBlocks.map(b => b.id));
+                    })
+                    .catch(() => {
+                      setBlocks([]);
+                      setSelectedBlocks([]);
+                    });
+                } else {
+                  setBlocks([]);
+                  setSelectedBlocks([]);
+                }
+              }}>✖</button>
             </div>
 
             <div style={styles.scrollBox}>
@@ -870,7 +922,27 @@ function UsersTable() {
 
             <div style={{ marginTop: "10px" }}>
               <button style={styles.editBtn} onClick={handleUpdate}>Save</button>
-              <button onClick={() => { setEditUser(null); setSelectedBlocks([]); }}>Cancel</button>
+              <button onClick={() => {
+                setEditUser(null);
+                // Restore district blocks or clear if no district selected
+                if (selectedDistrict) {
+                  axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
+                    .then(res => {
+                      const validBlocks = Array.isArray(res.data)
+                        ? res.data.filter(isValidBlock)
+                        : [];
+                      setBlocks(validBlocks);
+                      setSelectedBlocks(validBlocks.map(b => b.id));
+                    })
+                    .catch(() => {
+                      setBlocks([]);
+                      setSelectedBlocks([]);
+                    });
+                } else {
+                  setBlocks([]);
+                  setSelectedBlocks([]);
+                }
+              }}>Cancel</button>
             </div>
 
           </div>
