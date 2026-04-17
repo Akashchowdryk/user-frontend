@@ -186,8 +186,9 @@ const matchSearch =
       // ✅ Fetch Geofences (BLOCKS)
       axios.get("https://user-extract.onrender.com/api/geofences")
         .then(res => {
-          setBlocks(res.data || []);
+          setBlocks(Array.isArray(res.data) ? res.data : []);
         });
+        console.log("FULL USER:", res.data);
 
     })
     .catch(err => {
@@ -780,7 +781,7 @@ const handleUpdate = async () => {
   <label key={r} style={{display: "block", marginBottom: "8px"}}>
     <input
       type="checkbox"
-      checked={selectedRolesEdit.includes(r)}
+      checked={Array.isArray(selectedRolesEdit) && selectedRolesEdit.includes(r)}
       onChange={() => {
         setSelectedRolesEdit(prev =>
           prev.includes(r)
@@ -805,7 +806,9 @@ const handleUpdate = async () => {
             style={{...styles.input, width: "100%", boxSizing: "border-box"}}
             value={selectedReportingEdit?.id || ""}
             onChange={(e) => {
-              const selected = Array.isArray(reportingListEdit) ? reportingListEdit.find(r => r.id == e.target.value) : null;
+              const selected = Array.isArray(reportingListEdit)
+  ? reportingListEdit.find(r => r.id == e.target.value)
+  : null;
               setSelectedReportingEdit(selected);
             }}
           >
