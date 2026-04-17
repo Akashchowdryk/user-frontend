@@ -287,8 +287,12 @@ function UsersTable() {
       window.location.reload();
 
     } catch (err) {
-      console.error("ERROR:", err.response?.data || err.message);
-      alert("Update Failed ❌");
+      console.error("ERROR RESPONSE:", err.response?.data);
+      console.error("ERROR STATUS:", err.response?.status);
+      console.error("ERROR MESSAGE:", err.message);
+      
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || "Unknown error";
+      alert(`Update Failed ❌\n\nError: ${errorMsg}`);
     }
   };
 
@@ -787,9 +791,10 @@ function UsersTable() {
                 <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px", backgroundColor: "#fafafa" }}>
                   {Array.isArray(rolesList) && rolesList.length > 0 ? (
                     rolesList.map((r, idx) => {
-                      // Extract role name from different possible structures
-                      const roleId = r.id || r.name || idx;
-                      const roleName = r.configValue || r.name || r.value || "";
+                      // Extract role - use configKey (the actual role identifier)
+                      const roleId = r.id || r.configKey || idx;
+                      const roleName = r.configKey || "";  // USE configKey, NOT configValue
+                      const displayName = r.configKey || "(unnamed)";  // Show readable key name
 
                       return (
                         <label key={roleId} style={{ display: "block", marginBottom: "8px", cursor: "pointer" }}>
@@ -805,7 +810,7 @@ function UsersTable() {
                               });
                             }}
                           />
-                          {roleName || "(unnamed)"}
+                          {displayName}
                         </label>
                       );
                     })
