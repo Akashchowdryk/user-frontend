@@ -777,21 +777,21 @@ const handleUpdate = async () => {
           <div style={{maxHeight: "150px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px", backgroundColor: "#fafafa"}}>
             {Array.isArray(rolesList) && rolesList.length > 0 ? (
               rolesList.map(r => (
-                <label key={r} style={{display: "block", marginBottom: "8px", cursor: "pointer"}}>
-                  <input
-                    type="checkbox"
-                    checked={selectedRolesEdit.includes(r.name)}
-                    onChange={() => {
-                      setSelectedRolesEdit(prev =>
-                        prev.includes(r.name)
-                          ? prev.filter(x => x !== r.name)
-                          : [...prev, r.name]
-                      );
-                    }}
-                  />
-                  {r.name}
-                </label>
-              ))
+  <label key={r} style={{display: "block", marginBottom: "8px"}}>
+    <input
+      type="checkbox"
+      checked={selectedRolesEdit.includes(r)}
+      onChange={() => {
+        setSelectedRolesEdit(prev =>
+          prev.includes(r)
+            ? prev.filter(x => x !== r)
+            : [...prev, r]
+        );
+      }}
+    />
+    {r}
+  </label>
+))
             ) : (
               <p style={{color: "#999"}}>Loading roles...</p>
             )}
