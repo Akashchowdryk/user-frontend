@@ -159,14 +159,30 @@ const matchSearch =
 
       const fullUser = res.data;
 
-      setEditUser(fullUser);
+      // ✅ Sanitize user object - extract only needed properties
+      const cleanUser = {
+        id: fullUser.id,
+        login: fullUser.login,
+        firstName: fullUser.firstName || "",
+        lastName: fullUser.lastName || "",
+        email: fullUser.email || "",
+        phone: fullUser.phone || "",
+        gpsimei: fullUser.gpsimei || "",
+        activated: fullUser.activated ?? true,
+        authorities: fullUser.authorities || [],
+        ownedBy: fullUser.ownedBy || [],
+        geofences: fullUser.geofences || [],
+        langKey: fullUser.langKey || "en"
+      };
+
+      setEditUser(cleanUser);
 
       // ✅ Roles
-      setSelectedRolesEdit(fullUser.authorities || []);
+      setSelectedRolesEdit(cleanUser.authorities || []);
 
       // ✅ Geofences (IDs only) - SAFE VERSION
-      const geoIds = Array.isArray(fullUser.geofences)
-        ? fullUser.geofences.map(g =>
+      const geoIds = Array.isArray(cleanUser.geofences)
+        ? cleanUser.geofences.map(g =>
             typeof g === "object" ? g.id : g
           )
         : [];
@@ -185,7 +201,7 @@ const matchSearch =
           const list = Array.isArray(res.data) ? res.data : [];
           setReportingListEdit(list);
 
-          const reportingId = fullUser.ownedBy?.[0]?.id;
+          const reportingId = cleanUser.ownedBy?.[0]?.id;
           const selected = list.find(x => x.id === reportingId);
           setSelectedReportingEdit(selected || null);
         })
@@ -210,6 +226,7 @@ const matchSearch =
     })
     .catch(err => {
       console.error("Error loading user:", err);
+      alert("Failed to load user details ❌");
       setLoadingRoles(false);
       setLoadingReporting(false);
     });
