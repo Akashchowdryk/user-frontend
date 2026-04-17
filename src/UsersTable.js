@@ -278,6 +278,7 @@ function UsersTable() {
   const updatedUser = editUser;
 
   setEditUser(null);
+  setSelectedBlocks([]);
 
   setUsers(prevUsers =>
     prevUsers.map(u =>
@@ -699,7 +700,7 @@ function UsersTable() {
 
             <div style={styles.modalHeader}>
               <h3>Edit User</h3>
-              <button style={styles.closeBtnSmall} onClick={() => setEditUser(null)}>✖</button>
+              <button style={styles.closeBtnSmall} onClick={() => { setEditUser(null); setSelectedBlocks([]); }}>✖</button>
             </div>
 
             <div style={styles.scrollBox}>
@@ -869,7 +870,7 @@ function UsersTable() {
 
             <div style={{ marginTop: "10px" }}>
               <button style={styles.editBtn} onClick={handleUpdate}>Save</button>
-              <button onClick={() => setEditUser(null)}>Cancel</button>
+              <button onClick={() => { setEditUser(null); setSelectedBlocks([]); }}>Cancel</button>
             </div>
 
           </div>
