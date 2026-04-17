@@ -753,7 +753,7 @@ const handleUpdate = async () => {
                 <label key={b.id} style={{display:"block", marginBottom: "8px", cursor: "pointer", padding: "4px", borderRadius: "3px", backgroundColor: Array.isArray(selectedBlocks) && selectedBlocks.includes(b.id) ? "#e3f2fd" : "transparent"}}>
                   <input
                     type="checkbox"
-                    checked={selectedBlocks.includes(b.id)}
+                    checked={Array.isArray(selectedBlocks) && selectedBlocks.includes(b.id)}
                     onChange={() =>
                       setSelectedBlocks(prev =>
                         prev.includes(b.id)
