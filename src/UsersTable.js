@@ -88,8 +88,17 @@ const [selectedReportingEdit, setSelectedReportingEdit] = useState(null);
 
     axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
       .then(res => {
-        setBlocks(res.data);
-        setSelectedBlocks(res.data.map(b => b.id));
+        // Filter out empty objects and validate structure
+        const validBlocks = Array.isArray(res.data)
+          ? res.data.filter(b => b && b.id && b.name)
+          : [];
+        setBlocks(validBlocks);
+        setSelectedBlocks(validBlocks.map(b => b.id));
+      })
+      .catch(err => {
+        console.error("Error loading blocks:", err);
+        setBlocks([]);
+        setSelectedBlocks([]);
       })
       .finally(() => setBlocksLoading(false));
 
@@ -185,8 +194,17 @@ const matchSearch =
       // ✅ Fetch Geofences (BLOCKS)
       axios.get("https://user-extract.onrender.com/api/geofences")
         .then(res => {
-          setBlocks(Array.isArray(res.data) ? res.data : []);
-          console.log("BLOCKS LOADED:", res.data);
+          // Filter out empty objects and validate structure
+          const validBlocks = Array.isArray(res.data) 
+            ? res.data.filter(b => b && b.id && b.name)
+            : [];
+          setBlocks(validBlocks);
+          console.log("BLOCKS LOADED:", validBlocks);
+          console.log("Total blocks:", validBlocks.length);
+        })
+        .catch(err => {
+          console.error("Error loading blocks:", err);
+          setBlocks([]);
         });
 
     })
@@ -470,7 +488,7 @@ const handleUpdate = async () => {
         {/* LIST */}
         <div style={styles.dropdownList}>
           {Array.isArray(blocks) && blocks
-            .filter(b => b.name.toLowerCase().includes(blockSearch.toLowerCase()))
+            .filter(b => b && b.name && b.name.toLowerCase().includes(blockSearch.toLowerCase()))
             .map(b => (
               <label key={b.id} style={styles.dropdownItem}>
                 <input
@@ -749,7 +767,7 @@ const handleUpdate = async () => {
           <label style={{fontWeight: "bold", display: "block", marginBottom: "5px"}}>Blocks ({selectedBlocks?.length || 0} selected)</label>
           <div style={{maxHeight:"200px", overflowY:"auto", border:"1px solid #ccc", padding: "8px", borderRadius: "4px", backgroundColor: "#fafafa"}}>
             {Array.isArray(blocks) && blocks.length > 0 ? (
-              blocks.map(b => (
+              blocks.filter(b => b && b.id && b.name).map(b => (
                 <label key={b.id} style={{display:"block", marginBottom: "8px", cursor: "pointer", padding: "4px", borderRadius: "3px", backgroundColor: Array.isArray(selectedBlocks) && selectedBlocks.includes(b.id) ? "#e3f2fd" : "transparent"}}>
                   <input
                     type="checkbox"
