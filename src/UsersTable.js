@@ -283,24 +283,40 @@ function UsersTable() {
     console.log("- ReportingTo:", payload.reportingTo, typeof payload.reportingTo);
     console.log("- Activated:", payload.activated, typeof payload.activated);
 
-    try {
-      await axios.put(
-        "https://user-extract.onrender.com/api/edit-user",
-        payload
-      );
+   try {
+  await axios.put(
+    "https://user-extract.onrender.com/api/edit-user",
+    payload
+  );
 
-      alert("Updated Successfully ✅");
-      setEditUser(null);
-      window.location.reload();
+  const updatedUser = editUser;
 
-    } catch (err) {
-      console.error("ERROR RESPONSE:", err.response?.data);
-      console.error("ERROR STATUS:", err.response?.status);
-      console.error("ERROR MESSAGE:", err.message);
-      
-      const errorMsg = err.response?.data?.message || err.response?.data?.error || "Unknown error - Check backend logs";
-      alert(`Update Failed ❌\n\nError: ${errorMsg}\n\nCheck browser console for payload details.`);
-    }
+  setEditUser(null);
+
+  setUsers(prevUsers =>
+    prevUsers.map(u =>
+      u.login === updatedUser.login
+        ? {
+            ...u,
+            name: updatedUser.firstName + " " + updatedUser.lastName,
+            phone: updatedUser.phone,
+            roles: selectedRolesEdit,
+            reportingTo: selectedReportingEdit?.login || "",
+            geofenceNames: blocks
+              .filter(b => selectedBlocks.includes(b.id))
+              .map(b => b.name)
+          }
+        : u
+    )
+  );
+
+} catch (err) {
+  console.error("ERROR RESPONSE:", err.response?.data);
+  console.error("ERROR STATUS:", err.response?.status);
+  console.error("ERROR MESSAGE:", err.message);
+
+  alert("Update Failed ❌");
+}
   };
 
   const handleUserClick = (user) => {
