@@ -310,6 +310,8 @@ function UsersTable() {
     )
   );
 
+  alert("User Updated Successfully ✅");
+
 } catch (err) {
   console.error("ERROR RESPONSE:", err.response?.data);
   console.error("ERROR STATUS:", err.response?.status);
