@@ -225,20 +225,6 @@ function UsersTable() {
           })
           .finally(() => setLoadingReporting(false));
 
-        // ✅ FIXED: Fetch Geofences with strict string name validation
-        axios.get("https://user-extract.onrender.com/api/geofences")
-          .then(res => {
-            const validBlocks = Array.isArray(res.data)
-              ? res.data.filter(isValidBlock)
-              : [];
-            setBlocks(validBlocks);
-            console.log("BLOCKS LOADED:", validBlocks.length);
-          })
-          .catch(err => {
-            console.error("Error loading blocks:", err);
-            setBlocks([]);
-          });
-
       })
       .catch(err => {
         console.error("Error loading user:", err);
