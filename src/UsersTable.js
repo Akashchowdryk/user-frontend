@@ -270,11 +270,20 @@ function UsersTable() {
             .filter(Boolean)
         : [],
       geofences: selectedBlocks,
-      reportingTo: selectedReportingEdit?.id || null,
+      reportingTo: selectedReportingEdit
+  ? { id: selectedReportingEdit.id }
+  : null,
       langKey: editUser.langKey || "en"
     };
 
     console.log("FINAL PAYLOAD:", payload);
+    console.log("Payload details:");
+    console.log("- ID:", payload.id, typeof payload.id);
+    console.log("- Login:", payload.login, typeof payload.login);
+    console.log("- Authorities:", payload.authorities, Array.isArray(payload.authorities));
+    console.log("- Geofences:", payload.geofences, Array.isArray(payload.geofences));
+    console.log("- ReportingTo:", payload.reportingTo, typeof payload.reportingTo);
+    console.log("- Activated:", payload.activated, typeof payload.activated);
 
     try {
       await axios.put(
@@ -291,8 +300,8 @@ function UsersTable() {
       console.error("ERROR STATUS:", err.response?.status);
       console.error("ERROR MESSAGE:", err.message);
       
-      const errorMsg = err.response?.data?.message || err.response?.data?.error || "Unknown error";
-      alert(`Update Failed ❌\n\nError: ${errorMsg}`);
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || "Unknown error - Check backend logs";
+      alert(`Update Failed ❌\n\nError: ${errorMsg}\n\nCheck browser console for payload details.`);
     }
   };
 
