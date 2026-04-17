@@ -163,14 +163,14 @@ const matchSearch =
       setSelectedBlocks(geoIds);
 
       // ✅ Fetch Roles API (REAL)
-      axios.get("https://sitpolycab.fiberify.com/api/configs/Roles")
+      axios.get("https://user-extract.onrender.com/api/roles")
         .then(res => {
           setRolesList(res.data || []);
         })
         .finally(() => setLoadingRoles(false));
 
       // ✅ Fetch Reporting API (REAL)
-      axios.get("https://sitpolycab.fiberify.com/api/reporting-users")
+      axios.get("https://user-extract.onrender.com/api/reporting-users")
         .then(res => {
           const list = res.data || [];
           setReportingListEdit(list);
@@ -182,7 +182,7 @@ const matchSearch =
         .finally(() => setLoadingReporting(false));
 
       // ✅ Fetch Geofences (BLOCKS)
-      axios.get("https://sitpolycab.fiberify.com/api/master-mini-geofences")
+      axios.get("https://user-extract.onrender.com/api/geofences")
         .then(res => {
           setBlocks(res.data || []);
         });
