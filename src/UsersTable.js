@@ -156,10 +156,12 @@ const matchSearch =
       // ✅ Roles
       setSelectedRolesEdit(fullUser.authorities || []);
 
-      // ✅ Geofences (IDs only)
-      const geoIds = fullUser.geofences?.map(g =>
-        typeof g === "object" ? g.id : g
-      ) || [];
+      // ✅ Geofences (IDs only) - SAFE VERSION
+      const geoIds = Array.isArray(fullUser.geofences)
+        ? fullUser.geofences.map(g =>
+            typeof g === "object" ? g.id : g
+          )
+        : [];
       setSelectedBlocks(geoIds);
 
       // ✅ Fetch Roles API (REAL)
@@ -172,7 +174,7 @@ const matchSearch =
       // ✅ Fetch Reporting API (REAL)
       axios.get("https://user-extract.onrender.com/api/reporting-users")
         .then(res => {
-          const list = res.data || [];
+          const list = Array.isArray(res.data) ? res.data : [];
           setReportingListEdit(list);
 
           const reportingId = fullUser.ownedBy?.[0]?.id;
@@ -221,10 +223,8 @@ const handleUpdate = async () => {
     // ✅ Geofences (IMPORTANT FIX)
     geofences: selectedBlocks,
 
-    // ✅ Reporting
-    ownedBy: selectedReportingEdit
-      ? [{ id: selectedReportingEdit.id }]
-      : [],
+    // ✅ Reporting (FIXED FORMAT)
+    reportingTo: selectedReportingEdit?.id || null,
 
     langKey: editUser.langKey || "en"
   };
@@ -469,13 +469,13 @@ const handleUpdate = async () => {
 
         {/* LIST */}
         <div style={styles.dropdownList}>
-          {blocks
+          {Array.isArray(blocks) && blocks
             .filter(b => b.name.toLowerCase().includes(blockSearch.toLowerCase()))
             .map(b => (
               <label key={b.id} style={styles.dropdownItem}>
                 <input
                   type="checkbox"
-                  checked={selectedBlocks.includes(b.id)}
+                  checked={Array.isArray(selectedBlocks) && selectedBlocks.includes(b.id)}
                   onChange={() =>
                     setSelectedBlocks(prev =>
                       prev.includes(b.id)
@@ -748,9 +748,9 @@ const handleUpdate = async () => {
         <div style={{marginBottom: "15px"}}>
           <label style={{fontWeight: "bold", display: "block", marginBottom: "5px"}}>Blocks ({selectedBlocks?.length || 0} selected)</label>
           <div style={{maxHeight:"200px", overflowY:"auto", border:"1px solid #ccc", padding: "8px", borderRadius: "4px", backgroundColor: "#fafafa"}}>
-            {blocks && blocks.length > 0 ? (
+            {Array.isArray(blocks) && blocks.length > 0 ? (
               blocks.map(b => (
-                <label key={b.id} style={{display:"block", marginBottom: "8px", cursor: "pointer", padding: "4px", borderRadius: "3px", backgroundColor: selectedBlocks.includes(b.id) ? "#e3f2fd" : "transparent"}}>
+                <label key={b.id} style={{display:"block", marginBottom: "8px", cursor: "pointer", padding: "4px", borderRadius: "3px", backgroundColor: Array.isArray(selectedBlocks) && selectedBlocks.includes(b.id) ? "#e3f2fd" : "transparent"}}>
                   <input
                     type="checkbox"
                     checked={selectedBlocks.includes(b.id)}
