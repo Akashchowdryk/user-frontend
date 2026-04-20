@@ -35,6 +35,9 @@ function UsersTable() {
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [roleSearch, setRoleSearch] = useState("");
 
+  const [editBlockSearch, setEditBlockSearch] = useState("");
+  const [editRoleSearch, setEditRoleSearch] = useState("");
+
   const [reportingList, setReportingList] = useState([]);
   const [showReportingDropdown, setShowReportingDropdown] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
@@ -193,6 +196,8 @@ function UsersTable() {
         setEditUser(cleanUser);
 
         setSelectedRolesEdit(cleanUser.authorities || []);
+        setEditBlockSearch("");
+        setEditRoleSearch("");
 
         const geoIds = Array.isArray(cleanUser.geofences)
           ? cleanUser.geofences.map(g =>
@@ -812,10 +817,17 @@ function UsersTable() {
                 <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>
                   Blocks ({selectedBlocks?.length || 0} selected)
                 </label>
+                <input
+                  placeholder="Search blocks"
+                  style={{ ...styles.input, width: "100%", marginBottom: "10px" }}
+                  value={editBlockSearch}
+                  onChange={(e) => setEditBlockSearch(e.target.value)}
+                />
                 <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px", backgroundColor: "#fafafa" }}>
                   {Array.isArray(blocks) && blocks.length > 0 ? (
                     blocks
-                      .filter(isValidBlock)   // ✅ FIXED: only render valid blocks with string names
+                      .filter(isValidBlock)
+                      .filter(b => safeBlockName(b).toLowerCase().includes(editBlockSearch.toLowerCase()))
                       .map(b => (
                         <label
                           key={b.id}
@@ -852,28 +864,38 @@ function UsersTable() {
               {/* ROLES */}
               <div style={{ marginBottom: "15px" }}>
                 <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>Roles</label>
+                <input
+                  placeholder="Search roles"
+                  style={{ ...styles.input, width: "100%", marginBottom: "10px" }}
+                  value={editRoleSearch}
+                  onChange={(e) => setEditRoleSearch(e.target.value)}
+                />
                 <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px", backgroundColor: "#fafafa" }}>
                   {Array.isArray(rolesList) && rolesList.length > 0 ? (
-                    rolesList.map((r, idx) => {
-                      // Extract role - use configKey (the actual role identifier)
-                      const roleId = r.id || r.configKey || idx;
-                      const roleName = r.configKey || "";  // USE configKey, NOT configValue
-                      const displayName = r.configKey || "(unnamed)";  // Show readable key name
+                    rolesList
+                      .filter(r => {
+                        const roleName = (r.configKey || r.configValue || r.name || "").toString();
+                        return roleName.toLowerCase().includes(editRoleSearch.toLowerCase());
+                      })
+                      .map((r, idx) => {
+                        const roleId = r.id || r.configKey || idx;
+                        const roleName = r.configKey || r.configValue || r.name || "";
+                        const displayName = roleName || "(unnamed)";
 
-                      return (
-                        <label key={roleId} style={{ display: "block", marginBottom: "8px", cursor: "pointer" }}>
-                          <input
-                            type="checkbox"
-                            checked={Array.isArray(selectedRolesEdit) && selectedRolesEdit.includes(roleName)}
-                            onChange={() => {
-                              setSelectedRolesEdit(prev => {
-                                const safePrev = Array.isArray(prev) ? prev : [];
-                                return safePrev.includes(roleName)
-                                  ? safePrev.filter(x => x !== roleName)
-                                  : [...safePrev, roleName];
-                              });
-                            }}
-                          />
+                        return (
+                          <label key={roleId} style={{ display: "block", marginBottom: "8px", cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={Array.isArray(selectedRolesEdit) && selectedRolesEdit.includes(roleName)}
+                              onChange={() => {
+                                setSelectedRolesEdit(prev => {
+                                  const safePrev = Array.isArray(prev) ? prev : [];
+                                  return safePrev.includes(roleName)
+                                    ? safePrev.filter(x => x !== roleName)
+                                    : [...safePrev, roleName];
+                                });
+                              }}
+                            />
                           {displayName}
                         </label>
                       );
