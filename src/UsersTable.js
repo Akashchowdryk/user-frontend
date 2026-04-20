@@ -817,6 +817,18 @@ function UsersTable() {
                 <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>
                   Blocks ({selectedBlocks?.length || 0} selected)
                 </label>
+                <div style={{ marginBottom: "10px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {Array.isArray(selectedBlocks) && selectedBlocks.length > 0 ? (
+                    blocks
+                      .filter(isValidBlock)
+                      .filter(b => selectedBlocks.includes(b.id))
+                      .map(b => (
+                        <span key={`selected-block-${b.id}`} style={styles.chip}>{safeBlockName(b)}</span>
+                      ))
+                  ) : (
+                    <span style={styles.chipEmpty}>No blocks selected</span>
+                  )}
+                </div>
                 <input
                   placeholder="Search blocks"
                   style={{ ...styles.input, width: "100%", marginBottom: "10px" }}
@@ -864,6 +876,15 @@ function UsersTable() {
               {/* ROLES */}
               <div style={{ marginBottom: "15px" }}>
                 <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>Roles</label>
+                <div style={{ marginBottom: "10px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {Array.isArray(selectedRolesEdit) && selectedRolesEdit.length > 0 ? (
+                    selectedRolesEdit.map((role, idx) => (
+                      <span key={`selected-role-${role}-${idx}`} style={styles.chip}>{role}</span>
+                    ))
+                  ) : (
+                    <span style={styles.chipEmpty}>No roles selected</span>
+                  )}
+                </div>
                 <input
                   placeholder="Search roles"
                   style={{ ...styles.input, width: "100%", marginBottom: "10px" }}
@@ -991,6 +1012,8 @@ const styles = {
   dropdownActionBtn: { padding: "4px 8px", border: "1px solid #ccc", borderRadius: "4px", cursor: "pointer", fontSize: "12px", background: "#f5f5f5" },
   closeDropdownBtn: { marginTop: "5px" },
   downloadBtn: { background: "#2563eb", color: "white", padding: "8px" },
+  chip: { display: "inline-flex", alignItems: "center", padding: "4px 8px", borderRadius: "999px", background: "#e0f2fe", color: "#0369a1", fontSize: "12px", border: "1px solid #bae6fd" },
+  chipEmpty: { display: "inline-flex", alignItems: "center", padding: "4px 8px", borderRadius: "999px", background: "#f8fafc", color: "#6b7280", fontSize: "12px", border: "1px solid #e5e7eb" },
   loaderContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", margin: "15px 0" },
   spinner: { width: "18px", height: "18px", border: "3px solid #ccc", borderTop: "3px solid blue", borderRadius: "50%" },
   modalOverlay: {
