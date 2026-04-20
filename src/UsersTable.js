@@ -583,8 +583,7 @@ function UsersTable() {
             <tr key={i}
               style={styles.tr}
               onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "white"}
-              onClick={() => handleUserClick(u)}>
+              onMouseLeave={(e) => e.currentTarget.style.background = "white"}>
 
               <td style={styles.td}>{u.login}</td>
               <td style={styles.td}>{u.name}</td>
@@ -612,20 +611,14 @@ function UsersTable() {
               <td style={styles.td}>
                 <button
                   style={styles.viewBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleUserClick(u);
-                  }}
+                  onClick={() => handleUserClick(u)}
                 >
                   👁 View
                 </button>
 
                 <button
                   style={styles.editBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openEditModal(u);
-                  }}
+                  onClick={() => openEditModal(u)}
                 >
                   ✏️ Edit
                 </button>
