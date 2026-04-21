@@ -208,18 +208,27 @@ function UsersTable() {
 
         // Fetch Blocks for edit modal
         axios.get("https://user-extract.onrender.com/api/geofences")
-          .then(res => {
-            const validBlocks = Array.isArray(res.data)
-              ? res.data.filter(isValidBlock)
-              : [];
-            setBlocks(validBlocks);
-            console.log("BLOCKS LOADED FOR EDIT:", validBlocks.length);
-          })
-          .catch(err => {
-            console.error("Error loading blocks:", err);
-            setBlocks([]);
-          });
+  .then(res => {
 
+    const masters = Array.isArray(res.data?.masters) ? res.data.masters : [];
+const minis = Array.isArray(res.data?.minis) ? res.data.minis : [];
+
+
+const allBlocks = [...masters, ...minis];
+
+// ✅ apply validation
+const validBlocks = allBlocks.filter(isValidBlock);
+
+setBlocks(validBlocks);
+
+console.log("BLOCKS LOADED:", validBlocks.length);
+
+   
+  })
+  .catch(err => {
+    console.error("Error loading blocks:", err);
+    setBlocks([]);
+  });
         // Fetch Roles
         axios.get("https://user-extract.onrender.com/api/roles")
           .then(res => {
@@ -830,39 +839,42 @@ function UsersTable() {
                 />
                 <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px", backgroundColor: "#fafafa" }}>
                   {Array.isArray(blocks) && blocks.length > 0 ? (
-                    blocks
-                      .filter(isValidBlock)
-                      .filter(b => safeBlockName(b).toLowerCase().includes(editBlockSearch.toLowerCase()))
-                      .map(b => (
-                        <label
-                          key={b.id}
-                          style={{
-                            display: "block",
-                            marginBottom: "8px",
-                            cursor: "pointer",
-                            padding: "4px",
-                            borderRadius: "3px",
-                            backgroundColor: Array.isArray(selectedBlocks) && selectedBlocks.includes(b.id) ? "#e3f2fd" : "transparent"
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={Array.isArray(selectedBlocks) && selectedBlocks.includes(b.id)}
-                            onChange={() =>
-                              setSelectedBlocks(prev => {
-                                const safePrev = Array.isArray(prev) ? prev : [];
-                                return safePrev.includes(b.id)
-                                  ? safePrev.filter(id => id !== b.id)
-                                  : [...safePrev, b.id];
-                              })
-                            }
-                          />
-                          {safeBlockName(b)}  {/* ✅ FIXED: safe string render */}
-                        </label>
-                      ))
-                  ) : (
-                    <p style={{ color: "#999" }}>Loading blocks...</p>
-                  )}
+  blocks
+  .filter(isValidBlock)
+  .filter(b =>
+    b.name.toLowerCase().includes(editBlockSearch.toLowerCase())
+  )
+    .map(b => (
+      <label key={b.id} style={{
+        display: "block",
+        marginBottom: "8px",
+        cursor: "pointer",
+        padding: "4px",
+        borderRadius: "3px",
+        backgroundColor: selectedBlocks.includes(b.id)
+          ? "#e3f2fd"
+          : "transparent"
+      }}>
+        <input
+          type="checkbox"
+          checked={selectedBlocks.includes(b.id)}
+          onChange={() =>
+            setSelectedBlocks(prev =>
+              prev.includes(b.id)
+                ? prev.filter(id => id !== b.id)
+                : [...prev, b.id]
+            )
+          }
+        />
+
+        {/* ✅ HERE IS THE FIX */}
+        {safeBlockName(b)} ({b.geofenceType || "UNKNOWN"})
+
+      </label>
+    ))
+) : (
+  <p style={{ color: "#999" }}>Loading blocks...</p>
+)}
                 </div>
               </div>
 
