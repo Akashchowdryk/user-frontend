@@ -335,6 +335,7 @@ console.log("BLOCKS LOADED:", validBlocks.length);
             phone: updatedUser.phone,
             roles: selectedRolesEdit,
             reportingTo: selectedReportingEdit?.login || "",
+            activated: updatedUser.activated,
             geofenceNames: blocks
               .filter(b => selectedBlocks.includes(b.id))
               .map(b => b.name)
@@ -812,6 +813,18 @@ console.log("BLOCKS LOADED:", validBlocks.length);
                   value={editUser?.gpsimei || ""}
                   onChange={(e) => setEditUser({ ...editUser, gpsimei: e.target.value })}
                 />
+              </div>
+
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>Active Status</label>
+                <select
+                  style={{ ...styles.input, width: "100%", boxSizing: "border-box" }}
+                  value={editUser?.activated ? "active" : "inactive"}
+                  onChange={(e) => setEditUser({ ...editUser, activated: e.target.value === "active" })}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
               </div>
 
               {/* BLOCKS */}
