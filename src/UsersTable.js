@@ -56,6 +56,10 @@ function UsersTable() {
 
   const [selectedRolesEdit, setSelectedRolesEdit] = useState([]);
   const [selectedReportingEdit, setSelectedReportingEdit] = useState(null);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+const [bulkReportingTo, setBulkReportingTo] = useState("");
+const [showBulkPopup, setShowBulkPopup] = useState(false);
+const [updatedUsers, setUpdatedUsers] = useState([]);
 
   // ✅ SAFE HELPER: safely get block name as string
   const safeBlockName = (b) => {
@@ -122,6 +126,11 @@ function UsersTable() {
       .finally(() => setBlocksLoading(false));
 
   }, [selectedDistrict]);
+  useEffect(() => {
+  axios.get("https://user-extract.onrender.com/api/reporting-users")
+    .then(res => setReportingListEdit(res.data || []))
+    .catch(() => setReportingListEdit([]));
+}, []);
 
   // RESET PAGE
   useEffect(() => {
@@ -167,6 +176,47 @@ function UsersTable() {
     (currentPage - 1) * usersPerPage,
     currentPage * usersPerPage
   );
+  const handleBulkUpdate = async () => {
+
+  if (selectedUsers.length === 0) {
+    alert("Select users ❌");
+    return;
+  }
+
+  if (!bulkReportingTo) {
+    alert("Select reporting user ❌");
+    return;
+  }
+
+  try {
+    const res = await axios.put(
+      "https://user-extract.onrender.com/api/bulk-update-reporting",
+      {
+        logins: selectedUsers,
+        reportingTo: Number(bulkReportingTo)
+      }
+    );
+
+    setUpdatedUsers(selectedUsers);
+    setShowBulkPopup(true);
+
+    // ✅ update UI instantly
+    const selectedUserObj = reportingListEdit.find(r => r.id == bulkReportingTo);
+   setUsers(prev =>
+  prev.map(u =>
+    selectedUsers.includes(u.login)
+      ? { ...u, reportingTo: selectedUserObj?.login || "" }
+      : u
+  )
+);
+    setSelectedUsers([]);
+    setBulkReportingTo("");
+
+  } catch (err) {
+    console.error(err);
+    alert("Bulk update failed ❌");
+  }
+};
 
   const openEditModal = (user) => {
 
@@ -576,6 +626,7 @@ console.log("BLOCKS LOADED:", validBlocks.length);
       <table style={styles.table}>
         <thead>
           <tr>
+          <th style={styles.th}>Select</th>
             <th style={styles.th}>Login</th>
             <th style={styles.th}>Name</th>
             <th style={styles.th}>Phone</th>
@@ -590,10 +641,24 @@ console.log("BLOCKS LOADED:", validBlocks.length);
 
         <tbody>
           {currentUsers.map((u, i) => (
+            
             <tr key={i}
               style={styles.tr}
               onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
               onMouseLeave={(e) => e.currentTarget.style.background = "white"}>
+                <td style={styles.td}>
+    <input
+      type="checkbox"
+      checked={selectedUsers.includes(u.login)}
+      onChange={(e) => {
+        if (e.target.checked) {
+          setSelectedUsers(prev => [...prev, u.login]);
+        } else {
+          setSelectedUsers(prev => prev.filter(l => l !== u.login));
+        }
+      }}
+    />
+  </td>
 
               <td style={styles.td}>{u.login}</td>
               <td style={styles.td}>{u.name}</td>
@@ -633,6 +698,7 @@ console.log("BLOCKS LOADED:", validBlocks.length);
                   ✏️ Edit
                 </button>
               </td>
+              
 
             </tr>
           ))}
@@ -1009,9 +1075,70 @@ console.log("BLOCKS LOADED:", validBlocks.length);
           </div>
         </div>
       )}
+      {/* BULK CARD */}
+{selectedUsers.length > 0 && (
+  <div style={{
+    border: "1px solid #ccc",
+    padding: "10px",
+    marginTop: "10px",
+    borderRadius: "6px",
+    background: "#f9fafb"
+  }}>
+    <h4>Selected Users ({selectedUsers.length})</h4>
+
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+      {selectedUsers.map(login => (
+        <span key={login} style={styles.chip}>{login}</span>
+      ))}
+    </div>
+
+    <div style={{ marginTop: "10px" }}>
+      <select
+        value={bulkReportingTo}
+        onChange={(e) => setBulkReportingTo(e.target.value)}
+        style={styles.input}
+      >
+        <option value="">Select Reporting To</option>
+        {reportingListEdit.map(r => (
+          <option key={r.id} value={r.id}>
+            {r.login}
+          </option>
+        ))}
+      </select>
+
+      <button
+        style={{ ...styles.editBtn, marginLeft: "10px" }}
+        onClick={handleBulkUpdate}
+      >
+        Update Reporting
+      </button>
+    </div>
+  </div>
+)}
+{showBulkPopup && (
+  <div style={styles.modalOverlay}>
+    <div style={styles.modalBox}>
+
+      <h3>Reporting Updated ✅</h3>
+
+      <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+        {updatedUsers.map(u => (
+          <div key={u}>{u}</div>
+        ))}
+      </div>
+
+      <button onClick={() => setShowBulkPopup(false)}>
+        Close
+      </button>
+
+    </div>
+  </div>
+)}
     </div>
   );
+
 }
+
 
 const styles = {
   page: { padding: "20px" },
