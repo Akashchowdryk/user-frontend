@@ -438,7 +438,70 @@ console.log("BLOCKS LOADED:", validBlocks.length);
     <div style={styles.page}>
 
       <h2>User Dashboard</h2>
+      {/* BULK CARD */}
+{selectedUsers.length > 0 && (
+  <div style={{
+    border: "1px solid #ccc",
+    padding: "10px",
+    marginTop: "10px",
+    borderRadius: "6px",
+    background: "#f9fafb"
+  }}>
+    <h4>Selected Users ({selectedUsers.length})</h4>
 
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+      {selectedUsers.map(login => (
+        <span key={login} style={styles.chip}>{login}</span>
+      ))}
+    </div>
+
+    <div style={{ marginTop: "10px" }}>
+      <select
+        value={bulkReportingTo}
+        onChange={(e) => setBulkReportingTo(e.target.value)}
+        style={styles.input}
+      >
+        <option value="">Select Reporting To</option>
+       {Array.isArray(reportingListEdit) && reportingListEdit.length > 0 ? (
+  reportingListEdit.map(r => (
+    <option key={r.id} value={r.id}>
+      {r.login}
+    </option>
+  ))
+) : (
+  <option disabled>Loading reporting users...</option>
+)} 
+        
+      </select>
+
+      <button
+        style={{ ...styles.editBtn, marginLeft: "10px" }}
+        onClick={handleBulkUpdate}
+      >
+        Update Reporting
+      </button>
+    </div>
+  </div>
+)}
+{showBulkPopup && (
+  <div style={styles.modalOverlay}>
+    <div style={styles.modalBox}>
+
+      <h3>Reporting Updated ✅</h3>
+
+      <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+        {updatedUsers.map(u => (
+          <div key={u}>{u}</div>
+        ))}
+      </div>
+
+      <button onClick={() => setShowBulkPopup(false)}>
+        Close
+      </button>
+
+    </div>
+  </div>
+)}
       {loading && (
         <div style={styles.loaderContainer}>
           <div className="spinner"></div>
@@ -626,7 +689,28 @@ console.log("BLOCKS LOADED:", validBlocks.length);
       <table style={styles.table}>
         <thead>
           <tr>
-          <th style={styles.th}>Select</th>
+          <th style={styles.th}>
+  <input
+    type="checkbox"
+    checked={
+      filteredUsers.length > 0 &&
+      filteredUsers.every(u => selectedUsers.includes(u.login))
+    }
+    onChange={(e) => {
+      if (e.target.checked) {
+        // ✅ SELECT ALL FILTERED USERS (ALL PAGES)
+        const allLogins = filteredUsers.map(u => u.login);
+        setSelectedUsers(allLogins);
+      } else {
+        // ❌ UNSELECT ALL FILTERED USERS
+        const allLogins = filteredUsers.map(u => u.login);
+        setSelectedUsers(prev =>
+          prev.filter(login => !allLogins.includes(login))
+        );
+      }
+    }}
+  />
+</th>
             <th style={styles.th}>Login</th>
             <th style={styles.th}>Name</th>
             <th style={styles.th}>Phone</th>
@@ -1075,65 +1159,7 @@ console.log("BLOCKS LOADED:", validBlocks.length);
           </div>
         </div>
       )}
-      {/* BULK CARD */}
-{selectedUsers.length > 0 && (
-  <div style={{
-    border: "1px solid #ccc",
-    padding: "10px",
-    marginTop: "10px",
-    borderRadius: "6px",
-    background: "#f9fafb"
-  }}>
-    <h4>Selected Users ({selectedUsers.length})</h4>
-
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-      {selectedUsers.map(login => (
-        <span key={login} style={styles.chip}>{login}</span>
-      ))}
-    </div>
-
-    <div style={{ marginTop: "10px" }}>
-      <select
-        value={bulkReportingTo}
-        onChange={(e) => setBulkReportingTo(e.target.value)}
-        style={styles.input}
-      >
-        <option value="">Select Reporting To</option>
-        {reportingListEdit.map(r => (
-          <option key={r.id} value={r.id}>
-            {r.login}
-          </option>
-        ))}
-      </select>
-
-      <button
-        style={{ ...styles.editBtn, marginLeft: "10px" }}
-        onClick={handleBulkUpdate}
-      >
-        Update Reporting
-      </button>
-    </div>
-  </div>
-)}
-{showBulkPopup && (
-  <div style={styles.modalOverlay}>
-    <div style={styles.modalBox}>
-
-      <h3>Reporting Updated ✅</h3>
-
-      <div style={{ maxHeight: "200px", overflowY: "auto" }}>
-        {updatedUsers.map(u => (
-          <div key={u}>{u}</div>
-        ))}
-      </div>
-
-      <button onClick={() => setShowBulkPopup(false)}>
-        Close
-      </button>
-
-    </div>
-  </div>
-)}
+      
     </div>
   );
 
