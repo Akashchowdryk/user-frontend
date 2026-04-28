@@ -457,7 +457,7 @@ console.log("BLOCKS LOADED:", validBlocks.length);
         <span key={login} style={{ ...styles.chip, display: "flex", alignItems: "center", gap: "5px" }}>
           {login}
           <span
-            style={{ cursor: "pointer", color: "red", fontWeight: "bold" }}
+            style={{ cursor: "pointer", color: "blue", fontWeight: "bold" }}
             onClick={() =>
               setSelectedUsers(prev => prev.filter(u => u !== login))
             }
@@ -502,7 +502,7 @@ console.log("BLOCKS LOADED:", validBlocks.length);
             placeholder="Search..."
             value={bulkReportSearch}
             onChange={(e) => setBulkReportSearch(e.target.value)}
-            style={{ ...styles.input, width: "100%" }}
+            style={{ ...styles.input, width: "100%", boxSizing: "border-box", marginBottom: "8px" }}
           />
 
           <div style={{ maxHeight: "150px", overflowY: "auto" }}>
