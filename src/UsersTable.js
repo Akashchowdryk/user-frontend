@@ -60,6 +60,8 @@ function UsersTable() {
 const [bulkReportingTo, setBulkReportingTo] = useState("");
 const [showBulkPopup, setShowBulkPopup] = useState(false);
 const [updatedUsers, setUpdatedUsers] = useState([]);
+const [showBulkDropdown, setShowBulkDropdown] = useState(false);
+const [bulkReportSearch, setBulkReportSearch] = useState("");
 
   // ✅ SAFE HELPER: safely get block name as string
   const safeBlockName = (b) => {
@@ -449,37 +451,102 @@ console.log("BLOCKS LOADED:", validBlocks.length);
   }}>
     <h4>Selected Users ({selectedUsers.length})</h4>
 
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+    {/* ✅ USER CHIPS WITH REMOVE */}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
       {selectedUsers.map(login => (
-        <span key={login} style={styles.chip}>{login}</span>
+        <span key={login} style={{ ...styles.chip, display: "flex", alignItems: "center", gap: "5px" }}>
+          {login}
+          <span
+            style={{ cursor: "pointer", color: "red", fontWeight: "bold" }}
+            onClick={() =>
+              setSelectedUsers(prev => prev.filter(u => u !== login))
+            }
+          >
+            ✖
+          </span>
+        </span>
       ))}
     </div>
 
-    <div style={{ marginTop: "10px" }}>
-      <select
-        value={bulkReportingTo}
-        onChange={(e) => setBulkReportingTo(e.target.value)}
-        style={styles.input}
+    {/* ✅ CUSTOM DROPDOWN WITH SEARCH INSIDE */}
+    <div style={{ position: "relative", width: "250px", marginBottom: "10px" }}>
+
+      <div
+        style={{
+          border: "1px solid #ccc",
+          padding: "8px",
+          cursor: "pointer",
+          background: "white"
+        }}
+        onClick={() => setShowBulkDropdown(prev => !prev)}
       >
-        <option value="">Select Reporting To</option>
-       {Array.isArray(reportingListEdit) && reportingListEdit.length > 0 ? (
-  reportingListEdit.map(r => (
-    <option key={r.id} value={r.id}>
-      {r.login}
-    </option>
-  ))
-) : (
-  <option disabled>Loading reporting users...</option>
-)} 
-        
-      </select>
+        {bulkReportingTo
+          ? reportingListEdit.find(r => r.id == bulkReportingTo)?.login
+          : "Select Reporting To"}
+      </div>
+
+      {showBulkDropdown && (
+        <div style={{
+          position: "absolute",
+          top: "100%",
+          left: 0,
+          width: "100%",
+          background: "white",
+          border: "1px solid #ccc",
+          zIndex: 1000,
+          padding: "8px"
+        }}>
+
+          {/* 🔍 SEARCH INSIDE DROPDOWN */}
+          <input
+            placeholder="Search..."
+            value={bulkReportSearch}
+            onChange={(e) => setBulkReportSearch(e.target.value)}
+            style={{ ...styles.input, width: "100%" }}
+          />
+
+          <div style={{ maxHeight: "150px", overflowY: "auto" }}>
+            {reportingListEdit
+              .filter(r =>
+                r.login?.toLowerCase().includes(bulkReportSearch.toLowerCase())
+              )
+              .map(r => (
+                <div
+                  key={r.id}
+                  style={{ padding: "6px", cursor: "pointer" }}
+                  onClick={() => {
+                    setBulkReportingTo(r.id);
+                    setShowReportingDropdown(false);
+                    setBulkReportSearch("");
+                  }}
+                >
+                  {r.login} ({r.firstName} {r.lastName})
+                </div>
+              ))}
+          </div>
+
+        </div>
+      )}
+    </div>
+
+    {/* ✅ ACTION BUTTONS */}
+    <div style={{ display: "flex", gap: "10px" }}>
 
       <button
-        style={{ ...styles.editBtn, marginLeft: "10px" }}
+        style={styles.editBtn}
         onClick={handleBulkUpdate}
       >
         Update Reporting
       </button>
+
+      {/* ❌ REMOVE ALL BUTTON BESIDE */}
+      <button
+        style={{ background: "red", color: "white", border: "none", padding: "5px 10px", cursor: "pointer" }}
+        onClick={() => setSelectedUsers([])}
+      >
+        Remove All
+      </button>
+
     </div>
   </div>
 )}
