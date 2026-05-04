@@ -518,7 +518,7 @@ const renderOrgTree = (node) => {
 
   return (
     <div style={styles.page}>
-<h2>User Dashboard</h2>
+<h2>User Dashboard(s)</h2>
 
 <div style={styles.topBar}>
 
