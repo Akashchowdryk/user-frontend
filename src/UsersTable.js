@@ -2,6 +2,9 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import { Tree, TreeNode } from "react-organizational-chart";
+import { FaEye, FaEdit } from "react-icons/fa";
+
 
 // ✅ SAFE HELPER: ensures a block is valid and has a plain string name
 const isValidBlock = (b) =>
@@ -46,7 +49,7 @@ function UsersTable() {
   const [showBlockDropdown, setShowBlockDropdown] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const usersPerPage = 10;
+  
   const [editUser, setEditUser] = useState(null);
 
   const [rolesList, setRolesList] = useState([]);
@@ -62,6 +65,34 @@ const [showBulkPopup, setShowBulkPopup] = useState(false);
 const [updatedUsers, setUpdatedUsers] = useState([]);
 const [showBulkDropdown, setShowBulkDropdown] = useState(false);
 const [bulkReportSearch, setBulkReportSearch] = useState("");
+const [usersPerPage, setUsersPerPage] = useState(10);
+const [showFilters, setShowFilters] = useState(false);
+const [showHierarchy, setShowHierarchy] = useState(false);
+const [hierarchyData, setHierarchyData] = useState([]);
+const [hierarchyLoading, setHierarchyLoading] = useState(false);
+const [expandedNodes, setExpandedNodes] = useState({});
+const [expanded, setExpanded] = useState({});
+const [loadingNodes, setLoadingNodes] = useState({});
+const [position, setPosition] = useState({ x: 0, y: 0 });
+const [dragging, setDragging] = useState(false);
+const [start, setStart] = useState({ x: 0, y: 0 });
+const [zoom, setZoom] = useState(1);
+
+
+const startDrag = (e) => {
+  setDragging(true);
+  setStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+};
+
+const onDrag = (e) => {
+  if (!dragging) return;
+  setPosition({
+    x: e.clientX - start.x,
+    y: e.clientY - start.y
+  });
+};
+
+const stopDrag = () => setDragging(false);
 
   // ✅ SAFE HELPER: safely get block name as string
   const safeBlockName = (b) => {
@@ -178,7 +209,7 @@ const [bulkReportSearch, setBulkReportSearch] = useState("");
     (currentPage - 1) * usersPerPage,
     currentPage * usersPerPage
   );
-  const handleBulkUpdate = async () => {
+ const handleBulkUpdate = async () => {
 
   if (selectedUsers.length === 0) {
     alert("Select users ❌");
@@ -191,7 +222,7 @@ const [bulkReportSearch, setBulkReportSearch] = useState("");
   }
 
   try {
-    const res = await axios.put(
+    await axios.put(
       "https://user-extract.onrender.com/api/bulk-update-reporting",
       {
         logins: selectedUsers,
@@ -202,17 +233,12 @@ const [bulkReportSearch, setBulkReportSearch] = useState("");
     setUpdatedUsers(selectedUsers);
     setShowBulkPopup(true);
 
-    // ✅ update UI instantly
-    const selectedUserObj = reportingListEdit.find(r => r.id == bulkReportingTo);
-   setUsers(prev =>
-  prev.map(u =>
-    selectedUsers.includes(u.login)
-      ? { ...u, reportingTo: selectedUserObj?.login || "" }
-      : u
-  )
-);
+    // 🔥 RESET UI STATE
     setSelectedUsers([]);
     setBulkReportingTo("");
+
+    // 🔥 MOST IMPORTANT FIX
+    await reloadAllData();   // ✅ NOT reloadHierarchy()
 
   } catch (err) {
     console.error(err);
@@ -316,96 +342,60 @@ console.log("BLOCKS LOADED:", validBlocks.length);
 
   const handleUpdate = async () => {
 
-    if (!editUser) {
-      alert("No user selected ❌");
-      return;
-    }
-
-    const payload = {
-      id: editUser.id,
-      login: editUser.login,
-      firstName: editUser.firstName || "",
-      lastName: editUser.lastName || "",
-      email: editUser.email || "",
-      phone: editUser.phone || "",
-      gpsimei: editUser.gpsimei || "",
-      activated: editUser.activated ?? true,
-      authorities: Array.isArray(selectedRolesEdit)
-        ? selectedRolesEdit
-            .map(r => typeof r === "string" ? r : r?.configValue || r?.name || "")
-            .filter(Boolean)
-        : [],
-      geofences: selectedBlocks,
-      reportingTo: selectedReportingEdit?.id || null,
-      langKey: editUser.langKey || "en"
-    };
-
-    console.log("FINAL PAYLOAD:", payload);
-    console.log("Payload details:");
-    console.log("- ID:", payload.id, typeof payload.id);
-    console.log("- Login:", payload.login, typeof payload.login);
-    console.log("- Authorities:", payload.authorities, Array.isArray(payload.authorities));
-    console.log("- Geofences:", payload.geofences, Array.isArray(payload.geofences));
-    console.log("- ReportingTo:", payload.reportingTo, typeof payload.reportingTo);
-    console.log("- Activated:", payload.activated, typeof payload.activated);
-
-   try {
-  await axios.put(
-    "https://user-extract.onrender.com/api/edit-user",
-    payload
-  );
-
-  const updatedUser = editUser;
-
-  setEditUser(null);
-
-  // Restore district blocks or clear if no district selected
-  if (selectedDistrict) {
-    axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
-      .then(res => {
-        const validBlocks = Array.isArray(res.data)
-          ? res.data.filter(isValidBlock)
-          : [];
-        setBlocks(validBlocks);
-        setSelectedBlocks(validBlocks.map(b => b.id));
-      })
-      .catch(() => {
-        setBlocks([]);
-        setSelectedBlocks([]);
-      });
-  } else {
-    setBlocks([]);
-    setSelectedBlocks([]);
+  if (!editUser) {
+    alert("No user selected ❌");
+    return;
   }
 
-  setUsers(prevUsers =>
-    prevUsers.map(u =>
-      u.login === updatedUser.login
-        ? {
-            ...u,
-            name: updatedUser.firstName + " " + updatedUser.lastName,
-            phone: updatedUser.phone,
-            roles: selectedRolesEdit,
-            reportingTo: selectedReportingEdit?.login || "",
-            activated: updatedUser.activated,
-            geofenceNames: blocks
-              .filter(b => selectedBlocks.includes(b.id))
-              .map(b => b.name)
-          }
-        : u
-    )
-  );
-
-  alert("User Updated Successfully ✅");
-
-} catch (err) {
-  console.error("ERROR RESPONSE:", err.response?.data);
-  console.error("ERROR STATUS:", err.response?.status);
-  console.error("ERROR MESSAGE:", err.message);
-
-  alert("Update Failed ❌");
-}
+  const payload = {
+    id: editUser.id,
+    login: editUser.login,
+    firstName: editUser.firstName || "",
+    lastName: editUser.lastName || "",
+    email: editUser.email || "",
+    phone: editUser.phone || "",
+    gpsimei: editUser.gpsimei || "",
+    activated: editUser.activated ?? true,
+    authorities: Array.isArray(selectedRolesEdit)
+      ? selectedRolesEdit
+          .map(r => typeof r === "string" ? r : r?.configValue || r?.name || "")
+          .filter(Boolean)
+      : [],
+    geofences: selectedBlocks,
+    reportingTo: selectedReportingEdit?.id || null,
+    langKey: editUser.langKey || "en"
   };
+
+  console.log("FINAL PAYLOAD:", payload);
+
+  try {
+
+    // ✅ SINGLE API CALL ONLY
+    await axios.put(
+      "https://user-extract.onrender.com/api/edit-user",
+      payload
+    );
+
+    // ✅ CLOSE MODAL
+    setEditUser(null);
+
+    // ✅ RESET BLOCKS (OPTIONAL - KEEP IF YOU NEED FILTER RESET)
+    setBlocks([]);
+    setSelectedBlocks([]);
+
+    // 🔥 MOST IMPORTANT FIX
+    await reloadAllData();
+
+    alert("User Updated Successfully ✅");
+
+  } catch (err) {
+    console.error("ERROR RESPONSE:", err.response?.data);
+    console.error("ERROR STATUS:", err.response?.status);
+    console.error("ERROR MESSAGE:", err.message);
+
+    alert("Update Failed ❌");
+  }
+};
 
   const handleUserClick = (user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
@@ -435,11 +425,145 @@ console.log("BLOCKS LOADED:", validBlocks.length);
 
     setDownloading(false);
   };
+ 
+const handleWheel = (e) => {
+  e.preventDefault();
+
+  const delta = e.deltaY > 0 ? -0.1 : 0.1;
+
+  setZoom(prev => {
+    let newZoom = prev + delta;
+
+    if (newZoom < 0.5) newZoom = 0.5;
+    if (newZoom > 2) newZoom = 2;
+
+    return newZoom;
+  });
+};
+
+    const reloadAllData = async () => {
+  try {
+    const cb = Date.now();
+
+    const [usersRes, hierarchyRes] = await Promise.all([
+      axios.get(`/api/users-summary?cb=${cb}`),
+      axios.get(`/api/hierarchy/root?cb=${cb}`)
+    ]);
+
+    setUsers(usersRes.data);
+    setHierarchyData(hierarchyRes.data);
+
+  } catch (err) {
+    console.error(err);
+  }
+};
+const renderOrgTree = (node) => {
+  return (
+    <TreeNode
+      key={node.login}
+      label={
+        
+        <div
+          style={{
+            padding: "10px 18px",
+            borderRadius: "8px",
+            background: node.hasChildren ? "#16a34a" : "#3b82f6",
+            color: "white",
+            minWidth: "140px",
+            textAlign: "center",
+            boxShadow: "0 3px 8px rgba(0,0,0,0.2)",
+            cursor: "pointer"
+          }}
+          onClick={async () => {
+
+  // 🔁 collapse if already open
+  if (node.childrenLoaded) {
+    node.children = [];
+    node.childrenLoaded = false;
+    setHierarchyData([...hierarchyData]);
+    return;
+  }
+
+  // 🚀 load children
+  if (node.hasChildren) {
+    try {
+      const res = await axios.get(
+        `https://user-extract.onrender.com/api/hierarchy/children/${node.login}`
+      );
+
+      node.children = res.data.filter(
+        child => child.login !== node.login   // ✅ fix self loop
+      );
+
+      node.childrenLoaded = true;
+
+      setHierarchyData([...hierarchyData]);
+
+    } catch (err) {
+      console.error(err);
+    }
+  }
+}}
+        >
+          {node.login}
+        </div>
+      }
+    >
+      {node.children &&
+        node.children.map((child) => renderOrgTree(child))}
+        
+    </TreeNode>
+  );
+};
 
   return (
     <div style={styles.page}>
+<h2>User Dashboard</h2>
 
-      <h2>User Dashboard</h2>
+<div style={styles.topBar}>
+
+  {/* 🔍 SEARCH */}
+  <div style={styles.searchWrapper}>
+    <span style={styles.searchIcon}>🔍</span>
+    <input
+      placeholder="Search users..."
+      style={styles.searchInput}
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+    />
+  </div>
+
+  {/* BUTTONS */}
+  <div style={styles.topActions}>
+    <button
+      style={styles.primaryBtn}
+      onClick={() => setShowFilters(prev => !prev)}
+    >
+      ☰ Filters
+    </button>
+
+    <button
+      style={styles.secondaryBtn}
+      onClick={() => {
+  setShowHierarchy(true);
+  setHierarchyLoading(true);
+
+  axios.get("https://user-extract.onrender.com/api/hierarchy/root")
+    .then(res => setHierarchyData(res.data))
+    .catch(err => {
+      console.error("Hierarchy API error:", err);
+      setHierarchyData([]); // prevent crash
+      alert("Hierarchy API not available ❌");
+    })
+    .finally(() => setHierarchyLoading(false));
+}}
+    >
+       Hierarchy
+    </button>
+  </div>
+
+</div>
+
       {/* BULK CARD */}
 {selectedUsers.length > 0 && (
   <div style={{
@@ -516,7 +640,7 @@ console.log("BLOCKS LOADED:", validBlocks.length);
                   style={{ padding: "6px", cursor: "pointer" }}
                   onClick={() => {
                     setBulkReportingTo(r.id);
-                    setShowReportingDropdown(false);
+                   setShowBulkDropdown(false);
                     setBulkReportSearch("");
                   }}
                 >
@@ -583,14 +707,11 @@ console.log("BLOCKS LOADED:", validBlocks.length);
       )}
 
       {/* FILTERS */}
-      <div style={styles.filters}>
+      
 
-        <input
-          placeholder="Search"
-          style={styles.input}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+       
+        {showFilters && (
+  <div style={styles.filterPanel}>
 
         <div style={styles.dropdownWrapper}>
           <button
@@ -614,7 +735,7 @@ console.log("BLOCKS LOADED:", validBlocks.length);
                   style={{ ...styles.dropdownItem, fontWeight: "bold", color: "#2563eb" }}
                   onClick={() => {
                     setSelectedReportingTo("");
-                    setShowReportingDropdown(false);
+                    setShowBulkDropdown(false);
                     setReportSearch("");
                   }}
                 >
@@ -628,7 +749,7 @@ console.log("BLOCKS LOADED:", validBlocks.length);
                       style={styles.dropdownItem}
                       onClick={() => {
                         setSelectedReportingTo(r);
-                        setShowReportingDropdown(false);
+                        setShowBulkDropdown(false);
                         setReportSearch("");
                       }}
                     >
@@ -750,7 +871,9 @@ console.log("BLOCKS LOADED:", validBlocks.length);
           {downloading ? "Downloading..." : "Download"}
         </button>
 
-      </div>
+     
+       </div>
+)}
 
       {/* TABLE */}
       <table style={styles.table}>
@@ -836,18 +959,20 @@ console.log("BLOCKS LOADED:", validBlocks.length);
 
               <td style={styles.td}>
                 <button
-                  style={styles.viewBtn}
-                  onClick={() => handleUserClick(u)}
-                >
-                  👁 View
-                </button>
+    className="icon-btn view"
+    onClick={() => handleUserClick(u)}
+    title="View User"
+  >
+    <FaEye />
+  </button>
 
-                <button
-                  style={styles.editBtn}
-                  onClick={() => openEditModal(u)}
-                >
-                  ✏️ Edit
-                </button>
+                 <button
+    className="icon-btn edit"
+    onClick={() => openEditModal(u)}
+    title="Edit User"
+  >
+    <FaEdit />
+  </button>
               </td>
               
 
@@ -857,11 +982,103 @@ console.log("BLOCKS LOADED:", validBlocks.length);
       </table>
 
       {/* PAGINATION */}
-      <div style={styles.pagination}>
-        <button style={styles.pageBtn} onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}>Prev</button>
-        <span>{currentPage}/{totalPages}</span>
-        <button style={styles.pageBtn} onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}>Next</button>
-      </div>
+     <div style={styles.paginationContainer}>
+
+  {/* LEFT SIDE */}
+  <div style={styles.paginationLeft}>
+    
+    {/* Page Size */}
+    <div>
+      Page size{" "}
+      <select
+        value={usersPerPage}
+        onChange={(e) => {
+          setCurrentPage(1);
+          setUsersPerPage(Number(e.target.value));
+        }}
+        style={styles.select}
+      >
+        {[10, 20, 50, 100].map(size => (
+          <option key={size} value={size}>{size}</option>
+        ))}
+      </select>
+    </div>
+
+    {/* Showing Count */}
+    <div>
+      Showing{" "}
+      {filteredUsers.length === 0
+        ? 0
+        : (currentPage - 1) * usersPerPage + 1}
+      {" - "}
+      {Math.min(currentPage * usersPerPage, filteredUsers.length)}
+      {" of "}
+      {filteredUsers.length} items.
+    </div>
+
+  </div>
+
+  {/* RIGHT SIDE */}
+  <div style={styles.paginationRight}>
+
+    {/* Go To */}
+    <div>
+      Go To{" "}
+      <input
+        type="number"
+        min="1"
+        max={totalPages}
+        value={currentPage}
+        onChange={(e) => {
+          const page = Number(e.target.value);
+          if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+          }
+        }}
+        style={styles.gotoInput}
+      />
+    </div>
+
+    {/* PAGE BUTTONS */}
+    <div style={styles.pageNumbers}>
+
+      {/* Prev */}
+      <button
+        style={styles.pageBtn}
+        onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+      >
+        ‹
+      </button>
+
+      {/* Numbers */}
+      {[...Array(totalPages).keys()]
+        .slice(Math.max(0, currentPage - 3), currentPage + 2)
+        .map(i => (
+          <button
+            key={i}
+            onClick={() => setCurrentPage(i + 1)}
+            style={{
+              ...styles.pageNumber,
+              backgroundColor: currentPage === i + 1 ? "#f97316" : "white",
+              color: currentPage === i + 1 ? "white" : "black"
+            }}
+          >
+            {i + 1}
+          </button>
+        ))}
+
+      {/* Next */}
+      <button
+        style={styles.pageBtn}
+        onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+      >
+        ›
+      </button>
+
+    </div>
+  </div>
+
+</div>
 
       {/* VIEW MODAL */}
       {selectedUser && (
@@ -1226,6 +1443,72 @@ console.log("BLOCKS LOADED:", validBlocks.length);
           </div>
         </div>
       )}
+      {showHierarchy && (
+  <div style={{
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100vw",
+    height: "100vh",
+    background: "#f5f7fa",
+    zIndex: 9999,
+    overflow: "hidden"
+  }}>
+
+    {/* HEADER */}
+    <div style={{
+      height: "60px",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "0 20px",
+      background: "white",
+      boxShadow: "0 2px 6px rgba(0,0,0,0.1)"
+    }}>
+      <h3>User Hierarchy</h3>
+
+      <div style={{ display: "flex", gap: "10px" }}>
+        <button onClick={() => setZoom(z => Math.min(z + 0.1, 2))}>➕</button>
+        <button onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))}>➖</button>
+        <button onClick={() => setShowHierarchy(false)}>❌ Close</button>
+      </div>
+    </div>
+
+    {/* CANVAS AREA */}
+    <div
+  onMouseDown={startDrag}
+  onMouseMove={onDrag}
+  onMouseUp={stopDrag}
+  onMouseLeave={stopDrag}
+  onWheel={handleWheel}   
+  style={{
+    width: "100%",
+    height: "calc(100% - 60px)",
+    overflow: "hidden",
+    cursor: dragging ? "grabbing" : "grab",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "flex-start"
+  }}
+>
+  <div style={{
+    transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+    transformOrigin: "top center",   // ✅ IMPORTANT
+    width: "fit-content"
+  }}>
+    <Tree
+      lineWidth={"2px"}
+      lineColor={"#ccc"}
+      lineBorderRadius={"10px"}
+      label={<div></div>}
+    >
+      {hierarchyData.map(node => renderOrgTree(node))}
+    </Tree>
+  </div>
+</div>
+    </div>
+
+)}
       
     </div>
   );
@@ -1235,7 +1518,21 @@ console.log("BLOCKS LOADED:", validBlocks.length);
 
 const styles = {
   page: { padding: "20px" },
-  filters: { display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" },
+  filters: {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "10px",
+  alignItems: "center",
+  marginTop: "10px"
+},filterControl: {
+  height: "38px",
+  padding: "0 10px",
+  border: "1px solid #ccc",
+  borderRadius: "6px",
+  width: "100%",
+  background: "white",
+  fontSize: "14px"
+},
   input: { padding: "8px", width: "180px", marginBottom: "5px", border: "1px solid #ccc", borderRadius: "5px" },
   dropdownWrapper: { position: "relative", width: "200px" },
   dropdownBtn: { width: "100%", padding: "8px", border: "1px solid #ccc", cursor: "pointer", textAlign: "left" },
@@ -1259,11 +1556,164 @@ const styles = {
     background: "rgba(0,0,0,0.6)", display: "flex",
     justifyContent: "center", alignItems: "center", zIndex: 9999
   },
+  paginationContainer: {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginTop: "15px",
+  padding: "10px",
+  borderTop: "1px solid #ddd",
+  fontSize: "14px"
+},
+
+paginationLeft: {
+  display: "flex",
+  gap: "20px",
+  alignItems: "center"
+},topBar: {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "15px"
+},
+
+searchWrapper: {
+  display: "flex",
+  alignItems: "center",
+  border: "1px solid #ccc",
+  borderRadius: "20px",
+  padding: "5px 10px",
+  background: "white",
+  width: "260px"
+},
+loaderContainer: {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "30px",
+  gap: "10px"
+},
+
+spinner: {
+  width: "30px",
+  height: "30px",
+  border: "4px solid #ccc",
+  borderTop: "4px solid #2563eb",
+  borderRadius: "50%",
+  animation: "spin 1s linear infinite"
+},
+
+searchIcon: {
+  marginRight: "6px",
+  fontSize: "14px",
+  color: "#888"
+},
+
+searchInput: {
+  border: "none",
+  outline: "none",
+  width: "100%",
+  fontSize: "14px"
+},
+
+topActions: {
+  display: "flex",
+  gap: "10px"
+},
+
+primaryBtn: {
+  background: "#f97316",   // orange (like polycab)
+  color: "white",
+  border: "none",
+  padding: "8px 14px",
+  borderRadius: "5px",
+  cursor: "pointer",
+  fontWeight: "500"
+},
+
+secondaryBtn: {
+  background: "#f97316",
+  color: "white",
+  border: "none",
+  padding: "8px 14px",
+  borderRadius: "5px",
+  cursor: "pointer",
+  fontWeight: "500"
+},
+
+paginationRight: {
+  display: "flex",
+  gap: "20px",
+  alignItems: "center"
+},
+
+select: {
+  padding: "4px",
+  border: "1px solid #ccc",
+  borderRadius: "4px"
+},
+
+gotoInput: {
+  width: "50px",
+  padding: "4px",
+  border: "1px solid #ccc",
+  borderRadius: "4px"
+},
+
+pageNumbers: {
+  display: "flex",
+  gap: "5px",
+  alignItems: "center"
+},
+
+pageBtn: {
+  padding: "5px 8px",
+  border: "1px solid #ccc",
+  background: "white",
+  cursor: "pointer"
+},
+
+pageNumber: {
+  padding: "5px 10px",
+  border: "1px solid #ccc",
+  cursor: "pointer"
+},
   modalBox: {
     background: "white", width: "600px", maxHeight: "80vh",
     borderRadius: "10px", padding: "15px", display: "flex",
     flexDirection: "column", boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
   },
+  filterPanel: {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "12px",
+  padding: "15px",
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: "8px",
+  boxShadow: "0 2px 6px rgba(0,0,0,0.05)"
+},filterItem: {
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px"
+},
+
+filterLabel: {
+  fontSize: "12px",
+  color: "#6b7280",
+  fontWeight: "500"
+},
+
+filterControl: {
+  height: "36px",
+  padding: "6px 10px",
+  border: "1px solid #d1d5db",
+  borderRadius: "6px",
+  fontSize: "14px",
+  background: "#fff",
+  width: "100%"
+},
   modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #eee", marginBottom: "10px" },
   scrollBox: { overflowY: "auto", maxHeight: "60vh" },
   detailTable: { width: "100%", borderCollapse: "collapse" },
@@ -1277,7 +1727,98 @@ const styles = {
   pageBtn: { padding: "6px 12px", border: "1px solid #ccc", borderRadius: "5px", cursor: "pointer" },
   viewBtn: { padding: "5px", marginRight: "5px", background: "green", color: "white", border: "none", cursor: "pointer" },
   editBtn: { padding: "5px", background: "blue", color: "white", border: "none", cursor: "pointer" },
-  geoBox: { maxHeight: "60px", overflowY: "auto", paddingRight: "5px" }
+  geoBox: { maxHeight: "60px", overflowY: "auto", paddingRight: "5px" },hierarchyOverlay: {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  background: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 9999
+},
+
+hierarchyBox: {
+  background: "white",
+  width: "80%",
+  maxHeight: "80vh",
+  borderRadius: "10px",
+  padding: "15px",
+  overflow: "hidden"
+},
+
+hierarchyHeader: {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  borderBottom: "1px solid #eee",
+  marginBottom: "10px"
+},
+
+nodeCard: {
+  padding: "6px 10px",
+  border: "1px solid #ccc",
+  borderRadius: "6px",
+  background: "#f9fafb",
+  display: "inline-block"
+},
+hierarchyOverlay: {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  background: "rgba(0,0,0,0.5)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 9999
+},
+
+hierarchyBox: {
+  background: "white",
+  width: "80%",
+  maxHeight: "80vh",
+  borderRadius: "10px",
+  padding: "15px",
+  overflow: "hidden"
+},
+
+hierarchyHeader: {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  borderBottom: "1px solid #eee",
+  marginBottom: "10px"
+},
+
+nodeCard: {
+  padding: "6px 10px",
+  border: "1px solid #ccc",
+  borderRadius: "6px",
+  background: "#f9fafb",
+  display: "inline-block"
+},
+
+loaderContainer: {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "30px",
+  gap: "10px"
+},
+
+spinner: {
+  width: "30px",
+  height: "30px",
+  border: "4px solid #ccc",
+  borderTop: "4px solid #2563eb",
+  borderRadius: "50%",
+  animation: "spin 1s linear infinite"
+}
 };
 
 export default UsersTable;
