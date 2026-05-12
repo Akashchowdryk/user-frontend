@@ -3,7 +3,12 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { Tree, TreeNode } from "react-organizational-chart";
+import { useDrag, useDrop } from "react-dnd";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
+
 import { FaEye, FaEdit } from "react-icons/fa";
+
 
 
 // ✅ SAFE HELPER: ensures a block is valid and has a plain string name
@@ -24,7 +29,7 @@ function UsersTable() {
   const [search, setSearch] = useState("");
   const [selectedReportingTo, setSelectedReportingTo] = useState("");
 
-  const [loading, setLoading] = useState(true);
+  
   const [downloading, setDownloading] = useState(false);
 
   const [districts, setDistricts] = useState([]);
@@ -73,26 +78,38 @@ const [hierarchyLoading, setHierarchyLoading] = useState(false);
 const [expandedNodes, setExpandedNodes] = useState({});
 const [expanded, setExpanded] = useState({});
 const [loadingNodes, setLoadingNodes] = useState({});
-const [position, setPosition] = useState({ x: 0, y: 0 });
-const [dragging, setDragging] = useState(false);
-const [start, setStart] = useState({ x: 0, y: 0 });
+
 const [zoom, setZoom] = useState(1);
+const [position, setPosition] = useState({ x: 0, y: 0 });
+const [isPanning, setIsPanning] = useState(false);
+const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
+const [hierarchyEditUser, setHierarchyEditUser] = useState(null);
+const [hierarchyReporting, setHierarchyReporting] = useState("");
+const [hierarchyReportSearch, setHierarchyReportSearch] = useState("");
+const [showHierarchyDropdown, setShowHierarchyDropdown] = useState(false);
+const [hierarchyKey, setHierarchyKey] = useState(0);
+const [loading, setLoading] = useState(false);
 
+const [hierarchySearch, setHierarchySearch] = useState("");
+const [highlightedUser, setHighlightedUser] = useState("");
+const [searchingHierarchy, setSearchingHierarchy] = useState(false);
 
-const startDrag = (e) => {
-  setDragging(true);
-  setStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+const openHierarchyEdit = (node) => {
+  setHierarchyEditUser(node);
+
+  // 🔥 find matching reporting user from list
+  const current = reportingListEdit.find(
+    r => r.login === node.reportingTo || r.id === node.reportingTo
+  );
+
+  setHierarchyReporting(current?.id || "");
 };
 
-const onDrag = (e) => {
-  if (!dragging) return;
-  setPosition({
-    x: e.clientX - start.x,
-    y: e.clientY - start.y
-  });
-};
 
-const stopDrag = () => setDragging(false);
+  
+
+
+
 
   // ✅ SAFE HELPER: safely get block name as string
   const safeBlockName = (b) => {
@@ -100,7 +117,409 @@ const stopDrag = () => setDragging(false);
     if (typeof b.name === "string") return b.name;
     return "No name";
   };
+const HierarchyNode = ({
+  node,
+  reloadAllData,
+  setLoading,
+  expanded,
+  setExpanded,
+  loadChildren
+}) => {
 
+  // DRAG
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: "USER",
+    item: node,
+    collect: (monitor) => ({
+      isDragging: !!monitor.isDragging()
+    })
+  }));
+
+  // DROP
+  const [, drop] = useDrop(() => ({
+
+    accept: "USER",
+
+    drop: async (draggedUser) => {
+
+      if (draggedUser.login === node.login) return;
+
+      try {
+
+        setLoading(true);
+
+        const userRes = await axios.get(
+          `https://user-extract.onrender.com/api/user/${draggedUser.login}`
+        );
+
+        const user = userRes.data;
+
+        const payload = {
+          id: user.id,
+          login: user.login,
+          firstName: user.firstName || "",
+          lastName: user.lastName || "",
+          email: user.email || "",
+          phone: user.phone || "",
+          gpsimei: user.gpsimei || "",
+          activated: user.activated ?? true,
+          authorities: user.authorities || [],
+          geofences: user.geofences?.map(g => g.id || g) || [],
+          reportingTo: node.id,
+          langKey: user.langKey || "en"
+        };
+
+        await axios.put(
+          "https://user-extract.onrender.com/api/edit-user",
+          payload
+        );
+
+        alert("Hierarchy Updated ✅");
+
+        await reloadAllData();
+
+      } catch (err) {
+
+        console.error(err);
+        alert("Update failed ❌");
+
+      } finally {
+
+        setLoading(false);
+      }
+    }
+  }));
+
+  return (
+
+    <div
+      ref={drop}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center"
+      }}
+    >
+
+      {/* USER NODE */}
+      <div
+        ref={drag}
+        style={{
+          padding: "10px 14px",
+          borderRadius: "10px",
+          background:
+  highlightedUser === node.login
+    ? "#f59e0b"
+    : node.hasChildren
+      ? "#16a34a"
+      : "#2563eb",
+          color: "white",
+          cursor: "grab",
+          opacity: isDragging ? 0.5 : 1,
+          boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
+          minWidth: "120px",
+          textAlign: "center"
+        }}
+      >
+        {node.login}
+      </div>
+
+      {/* EXPAND BUTTON */}
+      {node.hasChildren && (
+
+  <div
+
+    onMouseDown={async (e) => {
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      console.log("EXPAND CLICKED:", node.login);
+
+      // collapse
+      if (expanded[node.login]) {
+
+        setExpanded(prev => ({
+          ...prev,
+          [node.login]: false
+        }));
+
+        return;
+      }
+
+      // load children
+      await loadChildren(node.login);
+      await new Promise(resolve =>
+  setTimeout(resolve, 300)
+);
+      // expand
+      setExpanded(prev => ({
+        ...prev,
+        [node.login]: true
+      }));
+
+    }}
+
+    style={{
+      marginTop: "8px",
+      width: "24px",
+      height: "24px",
+      borderRadius: "50%",
+      background: "#2563eb",
+      color: "white",
+      cursor: "pointer",
+      fontWeight: "bold",
+      fontSize: "14px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      userSelect: "none"
+    }}
+  >
+    {expanded[node.login] ? "−" : "+"}
+  </div>
+
+)}
+
+    </div>
+  );
+};
+const updateHierarchyReporting = async () => {
+  if (!hierarchyEditUser) return;
+
+  try {
+    // 🔹 your existing update logic
+    const userRes = await axios.get(
+      `https://user-extract.onrender.com/api/user/${hierarchyEditUser.login}`
+    );
+
+    const user = userRes.data;
+    
+
+    const payload = {
+      id: user.id,
+      login: user.login,
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      email: user.email || "",
+      phone: user.phone || "",
+      gpsimei: user.gpsimei || "",
+      activated: user.activated ?? true,
+      authorities: user.authorities || [],
+      geofences: user.geofences?.map(g => g.id || g) || [],
+      reportingTo: Number(hierarchyReporting),
+      langKey: user.langKey || "en"
+    };
+
+    await axios.put(
+      "https://user-extract.onrender.com/api/edit-user",
+      payload
+    );
+    // 🔥 refresh all app data
+await reloadAllData();
+
+// close modal
+setHierarchyEditUser(null);
+
+alert("Updated Successfully ✅");
+
+   
+
+  } catch (err) {
+    console.error(err);
+    alert("Update failed ❌");
+  }
+};
+const loadChildren = async (login) => {
+
+  try {
+
+    setLoadingNodes(prev => ({
+      ...prev,
+      [login]: true
+    }));
+
+    const res = await axios.get(
+      `https://user-extract.onrender.com/api/hierarchy/children/${login}`
+    );
+const children = Array.isArray(res.data)
+  ? res.data.map(c => ({
+      ...c,
+      children: c.children || []
+    }))
+  : [];
+    const updateTree = (nodes) => {
+
+      return nodes.map(n => {
+
+        if (n.login === login) {
+
+          return {
+            ...n,
+            children
+          };
+        }
+
+        if (n.children) {
+
+          return {
+            ...n,
+            children: updateTree(n.children)
+          };
+        }
+
+        return n;
+      });
+    };
+
+    setHierarchyData(prev => [...updateTree(prev)]);
+    await new Promise(resolve =>
+  setTimeout(resolve, 200)
+);
+    setHierarchyKey(prev => prev + 1);
+
+  } catch (err) {
+
+    console.error(err);
+
+  } finally {
+
+    setLoadingNodes(prev => ({
+      ...prev,
+      [login]: false
+    }));
+  }
+};
+const searchHierarchyUser = async (searchLogin) => {
+
+  if (!searchLogin) return;
+
+  setSearchingHierarchy(true);
+  setHighlightedUser(searchLogin);
+
+  const expandedMap = {};
+
+  // recursive API traversal
+  const traverse = async (login, path = []) => {
+
+    // current path
+    const currentPath = [...path, login];
+
+    // found target
+    if (
+      login.toLowerCase() ===
+      searchLogin.toLowerCase()
+    ) {
+
+      currentPath.forEach(p => {
+        expandedMap[p] = true;
+      });
+
+      return true;
+    }
+
+    try {
+
+      // fetch children directly
+      const res = await axios.get(
+        `https://user-extract.onrender.com/api/hierarchy/children/${login}`
+      );
+
+      const children = Array.isArray(res.data)
+        ? res.data
+        : [];
+
+      // update tree visually
+      setHierarchyData(prev => {
+
+        const updateTree = (nodes) => {
+
+          return nodes.map(n => {
+
+            if (n.login === login) {
+
+              return {
+                ...n,
+                children
+              };
+            }
+
+            return {
+              ...n,
+              children: n.children
+                ? updateTree(n.children)
+                : []
+            };
+          });
+        };
+
+        return updateTree(prev);
+      });
+
+      // search children
+      for (const child of children) {
+
+        const found = await traverse(
+          child.login,
+          currentPath
+        );
+
+        if (found) return true;
+      }
+
+    } catch (err) {
+
+      console.error(err);
+    }
+
+    return false;
+  };
+
+  // start from roots
+  for (const root of hierarchyData) {
+
+    const found = await traverse(root.login);
+
+    if (found) break;
+  }
+
+  // apply all expansions together
+  setExpanded(expandedMap);
+
+  // force rerender
+  setHierarchyKey(prev => prev + 1);
+  setSearchingHierarchy(false);
+};
+const renderOrgTree = (node) => {
+
+  const isExpanded = expanded[node.login];
+
+  return (
+
+    <TreeNode
+  key={`${node.login}-${node.children?.length || 0}`}
+  label={
+    <div style={{ textAlign: "center" }}>
+      <HierarchyNode
+        node={node}
+        reloadAllData={reloadAllData}
+        setLoading={setLoading}
+        expanded={expanded}
+        setExpanded={setExpanded}
+        loadChildren={loadChildren}
+      />
+    </div>
+  }
+>
+{expanded[node.login] === true &&
+  Array.isArray(node.children) &&
+  node.children.length > 0 &&
+  node.children.map(child => renderOrgTree(child))
+}
+
+</TreeNode>
+  );
+};
   // USERS
   useEffect(() => {
     setLoading(true);
@@ -125,6 +544,15 @@ const stopDrag = () => setDragging(false);
       })
       .finally(() => setLoading(false));
   }, []);
+  useEffect(() => {
+  const reopen = localStorage.getItem("reopenHierarchy");
+
+  if (reopen === "true") {
+    setShowHierarchy(true);
+
+    localStorage.removeItem("reopenHierarchy");
+  }
+}, []);
 
   // DISTRICTS
   useEffect(() => {
@@ -203,6 +631,100 @@ const stopDrag = () => setDragging(false);
 
     return matchSearch && matchReporting && matchRoles && matchBlocks && matchDistrict;
   });
+  const cleanStyles = {
+  modalOverlay: {
+    position: "fixed",
+    top: 0, left: 0, right: 0, bottom: 0,
+    background: "rgba(0,0,0,0.5)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 9999
+  },
+
+  modalBox: {
+    width: "420px",
+    background: "white",
+    borderRadius: "12px",
+    padding: "20px",
+    boxShadow: "0 8px 25px rgba(0,0,0,0.2)"
+  },
+
+  header: {
+    marginBottom: "10px"
+  },
+
+  userText: {
+    marginBottom: "15px",
+    fontSize: "14px"
+  },
+
+  dropdownContainer: {
+    position: "relative"
+  },
+
+  selectBox: {
+    border: "1px solid #ccc",
+    padding: "10px",
+    borderRadius: "6px",
+    cursor: "pointer",
+    background: "#f9fafb"
+  },
+
+  dropdown: {
+    position: "absolute",
+    width: "100%",
+    background: "white",
+    border: "1px solid #ddd",
+    borderRadius: "6px",
+    marginTop: "5px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+    zIndex: 1000
+  },
+
+  searchInput: {
+    width: "100%",
+    padding: "8px",
+    border: "none",
+    borderBottom: "1px solid #eee",
+    outline: "none"
+  },
+
+  list: {
+    maxHeight: "180px",
+    overflowY: "auto"
+  },
+
+  listItem: {
+    padding: "10px",
+    cursor: "pointer",
+    borderBottom: "1px solid #f1f1f1"
+  },
+
+  actions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "10px",
+    marginTop: "20px"
+  },
+
+  saveBtn: {
+    background: "#2563eb",
+    color: "white",
+    border: "none",
+    padding: "8px 14px",
+    borderRadius: "6px",
+    cursor: "pointer"
+  },
+
+  cancelBtn: {
+    background: "#e5e7eb",
+    border: "none",
+    padding: "8px 14px",
+    borderRadius: "6px",
+    cursor: "pointer"
+  }
+};
 
   const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
   const currentUsers = filteredUsers.slice(
@@ -347,6 +869,8 @@ console.log("BLOCKS LOADED:", validBlocks.length);
     return;
   }
 
+
+
   const payload = {
     id: editUser.id,
     login: editUser.login,
@@ -427,93 +951,75 @@ console.log("BLOCKS LOADED:", validBlocks.length);
   };
  
 const handleWheel = (e) => {
-  e.preventDefault();
 
   const delta = e.deltaY > 0 ? -0.1 : 0.1;
 
   setZoom(prev => {
+
     let newZoom = prev + delta;
 
-    if (newZoom < 0.5) newZoom = 0.5;
-    if (newZoom > 2) newZoom = 2;
+    if (newZoom < 0.3) newZoom = 0.3;
+    if (newZoom > 3) newZoom = 3;
 
     return newZoom;
   });
 };
+const handleMouseDown = (e) => {
 
-    const reloadAllData = async () => {
+  setIsPanning(true);
+
+  setStartPoint({
+    x: e.clientX - position.x,
+    y: e.clientY - position.y
+  });
+};
+
+const handleMouseMove = (e) => {
+
+  if (!isPanning) return;
+
+  setPosition({
+    x: e.clientX - startPoint.x,
+    y: e.clientY - startPoint.y
+  });
+};
+
+const handleMouseUp = () => {
+  setIsPanning(false);
+};
+const reloadAllData = async () => {
+
+  setLoading(true);
+
   try {
+
     const cb = Date.now();
 
     const [usersRes, hierarchyRes] = await Promise.all([
-      axios.get(`/api/users-summary?cb=${cb}`),
-      axios.get(`/api/hierarchy/root?cb=${cb}`)
+      axios.get(
+        `https://user-extract.onrender.com/api/users-summary?cb=${cb}`
+      ),
+      axios.get(
+        `https://user-extract.onrender.com/api/hierarchy/root?cb=${cb}`
+      )
     ]);
 
     setUsers(usersRes.data);
-    setHierarchyData(hierarchyRes.data);
+   setHierarchyData(
+  Array.isArray(hierarchyRes.data)
+    ? hierarchyRes.data
+    : [hierarchyRes.data]
+);
 
   } catch (err) {
+
     console.error(err);
+
+  } finally {
+
+    setLoading(false);
+
   }
-};
-const renderOrgTree = (node) => {
-  return (
-    <TreeNode
-      key={node.login}
-      label={
-        
-        <div
-          style={{
-            padding: "10px 18px",
-            borderRadius: "8px",
-            background: node.hasChildren ? "#16a34a" : "#3b82f6",
-            color: "white",
-            minWidth: "140px",
-            textAlign: "center",
-            boxShadow: "0 3px 8px rgba(0,0,0,0.2)",
-            cursor: "pointer"
-          }}
-          onClick={async () => {
-
-  // 🔁 collapse if already open
-  if (node.childrenLoaded) {
-    node.children = [];
-    node.childrenLoaded = false;
-    setHierarchyData([...hierarchyData]);
-    return;
-  }
-
-  // 🚀 load children
-  if (node.hasChildren) {
-    try {
-      const res = await axios.get(
-        `https://user-extract.onrender.com/api/hierarchy/children/${node.login}`
-      );
-
-      node.children = res.data.filter(
-        child => child.login !== node.login   // ✅ fix self loop
-      );
-
-      node.childrenLoaded = true;
-
-      setHierarchyData([...hierarchyData]);
-
-    } catch (err) {
-      console.error(err);
-    }
-  }
-}}
-        >
-          {node.login}
-        </div>
-      }
-    >
-      {node.children &&
-        node.children.map((child) => renderOrgTree(child))}
-        
-    </TreeNode>
-  );
 };
 
   return (
@@ -549,7 +1055,17 @@ const renderOrgTree = (node) => {
   setHierarchyLoading(true);
 
   axios.get("https://user-extract.onrender.com/api/hierarchy/root")
-    .then(res => setHierarchyData(res.data))
+    .then(res => {
+
+  setHierarchyData(
+  Array.isArray(res.data)
+    ? res.data
+    : [res.data]
+);
+
+  
+})
+    
     .catch(err => {
       console.error("Hierarchy API error:", err);
       setHierarchyData([]); // prevent crash
@@ -1454,7 +1970,69 @@ const renderOrgTree = (node) => {
     zIndex: 9999,
     overflow: "hidden"
   }}>
+<div style={{
+  padding: "10px 20px",
+  borderBottom: "1px solid #ddd",
+  background: "white",
+  display: "flex",
+  alignItems: "center",
+  gap: "12px"
+}}>
 
+  <input
+    type="text"
+    placeholder="Search user in hierarchy..."
+    value={hierarchySearch}
+
+    onChange={(e) => {
+      setHierarchySearch(e.target.value);
+    }}
+
+    onKeyDown={async (e) => {
+
+      if (e.key !== "Enter") return;
+
+      await searchHierarchyUser(hierarchySearch);
+
+    }}
+
+    style={{
+      width: "300px",
+      padding: "10px 14px",
+      borderRadius: "8px",
+      border: "1px solid #ccc",
+      outline: "none",
+      fontSize: "14px"
+    }}
+  />
+
+  {/* SEARCH LOADER */}
+  {searchingHierarchy && (
+
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      color: "#2563eb",
+      fontWeight: "500"
+    }}>
+
+      <div style={{
+        width: "18px",
+        height: "18px",
+        border: "3px solid #dbeafe",
+        borderTop: "3px solid #2563eb",
+        borderRadius: "50%",
+        animation: "spin 1s linear infinite"
+      }}></div>
+
+      Searching hierarchy...
+
+    </div>
+
+  )}
+
+</div>
     {/* HEADER */}
     <div style={{
       height: "60px",
@@ -1476,38 +2054,150 @@ const renderOrgTree = (node) => {
 
     {/* CANVAS AREA */}
     <div
-  onMouseDown={startDrag}
-  onMouseMove={onDrag}
-  onMouseUp={stopDrag}
-  onMouseLeave={stopDrag}
-  onWheel={handleWheel}   
+  onWheel={handleWheel}
+  onMouseDown={handleMouseDown}
+  onMouseMove={handleMouseMove}
+  onMouseUp={handleMouseUp}
+  onMouseLeave={handleMouseUp}
+
   style={{
     width: "100%",
     height: "calc(100% - 60px)",
     overflow: "hidden",
-    cursor: dragging ? "grabbing" : "grab",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "flex-start"
+    cursor: isPanning ? "grabbing" : "grab",
+    background: "#f5f7fa",
+    position: "relative"
   }}
 >
-  <div style={{
-    transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
-    transformOrigin: "top center",   // ✅ IMPORTANT
-    width: "fit-content"
-  }}>
-    <Tree
-      lineWidth={"2px"}
-      lineColor={"#ccc"}
-      lineBorderRadius={"10px"}
-      label={<div></div>}
-    >
-      {hierarchyData.map(node => renderOrgTree(node))}
-    </Tree>
+
+  <div
+    style={{
+      transform: `
+        translate(${position.x}px, ${position.y}px)
+        scale(${zoom})
+      `,
+      transformOrigin: "top left",
+      transition: isPanning
+        ? "none"
+        : "transform 0.1s ease",
+      minWidth: "max-content",
+      minHeight: "max-content",
+      padding: "50px"
+    }}
+  >
+
+    <DndProvider backend={HTML5Backend}>
+
+      <Tree
+        key={hierarchyKey}
+        lineWidth={"2px"}
+        lineColor={"#ccc"}
+        lineBorderRadius={"10px"}
+        label={<div></div>}
+      >
+        {hierarchyData.map(node => renderOrgTree(node))}
+      </Tree>
+
+    </DndProvider>
+
   </div>
+
 </div>
+</div>
+)}
+{hierarchyEditUser && (
+ <div style={cleanStyles.modalOverlay}>
+  <div style={cleanStyles.modalBox}>
+
+    {/* HEADER */}
+    <div style={cleanStyles.header}>
+      <h3>Edit Reporting</h3>
     </div>
 
+    {/* USER */}
+    <div style={cleanStyles.userText}>
+      <span>User:</span> {hierarchyEditUser.login}
+    </div>
+
+    {/* DROPDOWN */}
+    <div style={cleanStyles.dropdownContainer}>
+
+      {/* SELECT BOX */}
+      <div
+        style={cleanStyles.selectBox}
+        onClick={() => setShowHierarchyDropdown(prev => !prev)}
+      >
+        {hierarchyReporting
+          ? reportingListEdit.find(r => r.id == hierarchyReporting)?.login
+          : "Select Reporting User"}
+      </div>
+
+      {/* DROPDOWN */}
+      {showHierarchyDropdown && (
+        <div style={cleanStyles.dropdown}>
+
+          {/* SEARCH */}
+          <input
+            placeholder="Search reporting user..."
+            value={hierarchyReportSearch}
+            onChange={(e) => setHierarchyReportSearch(e.target.value)}
+            style={cleanStyles.searchInput}
+          />
+
+          {/* LIST */}
+          <div style={cleanStyles.list}>
+            {reportingListEdit
+              .filter(r =>
+                r.login?.toLowerCase().includes(hierarchyReportSearch.toLowerCase())
+              )
+              .map(r => (
+                <div
+                  key={r.id}
+                  style={{
+                    ...cleanStyles.listItem,
+                    background:
+                      hierarchyReporting == r.id ? "#e0f2fe" : "white"
+                  }}
+                  onClick={() => {
+                    setHierarchyReporting(r.id);
+                    setShowHierarchyDropdown(false);
+                    setHierarchyReportSearch("");
+                  }}
+                >
+                  <b>{r.login}</b>
+                  <div style={{ fontSize: "12px", color: "#666" }}>
+                    {r.firstName} {r.lastName}
+                  </div>
+                </div>
+              ))}
+          </div>
+
+        </div>
+      )}
+    </div>
+
+    {/* BUTTONS */}
+    <div style={cleanStyles.actions}>
+      <button style={cleanStyles.saveBtn} onClick={updateHierarchyReporting}>
+        Save
+      </button>
+
+      <button style={cleanStyles.cancelBtn} onClick={() => setHierarchyEditUser(null)}>
+        Cancel
+      </button>
+    </div>
+
+  </div>
+
+  </div>
+)}
+{loading && (
+  <div style={styles.loaderOverlay}>
+    <div style={styles.spinner}></div>
+    <p style={{ color: "white", marginTop: "10px" }}>
+      Loading...
+    </p>
+  </div>
 )}
       
     </div>
@@ -1524,6 +2214,28 @@ const styles = {
   gap: "10px",
   alignItems: "center",
   marginTop: "10px"
+},
+loaderOverlay: {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  width: "100%",
+  height: "100%",
+  background: "rgba(0,0,0,0.5)",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 99999
+},
+
+spinner: {
+  width: "50px",
+  height: "50px",
+  border: "5px solid #f3f3f3",
+  borderTop: "5px solid #2563eb",
+  borderRadius: "50%",
+  animation: "spin 1s linear infinite"
 },filterControl: {
   height: "38px",
   padding: "0 10px",
