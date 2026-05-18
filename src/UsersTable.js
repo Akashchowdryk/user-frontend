@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import { Tree, TreeNode } from "react-organizational-chart";
+import Tree from "react-d3-tree";
 import { useDrag, useDrop } from "react-dnd";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
@@ -93,6 +93,12 @@ const [loading, setLoading] = useState(false);
 const [hierarchySearch, setHierarchySearch] = useState("");
 const [highlightedUser, setHighlightedUser] = useState("");
 const [searchingHierarchy, setSearchingHierarchy] = useState(false);
+const [hierarchyAbortController, setHierarchyAbortController] = useState(null);
+const [totalUsers,setTotalUsers]=useState(0);
+
+const [page,setPage]=useState(0);
+
+const [size,setSize]=useState(10);
 
 const openHierarchyEdit = (node) => {
   setHierarchyEditUser(node);
@@ -104,13 +110,6 @@ const openHierarchyEdit = (node) => {
 
   setHierarchyReporting(current?.id || "");
 };
-
-
-  
-
-
-
-
   // ✅ SAFE HELPER: safely get block name as string
   const safeBlockName = (b) => {
     if (!b) return "No name";
@@ -330,6 +329,86 @@ alert("Updated Successfully ✅");
     alert("Update failed ❌");
   }
 };
+
+// ✅ Enrich hierarchy nodes with user details (firstName, lastName)
+const enrichHierarchyWithUserDetails = async (nodes) => {
+  const enriched = [];
+  
+  for (const node of nodes) {
+    try {
+      const userRes = await axios.get(
+        `https://user-extract.onrender.com/api/user/${node.login}`
+      );
+      const userDetails = userRes.data;
+      
+      enriched.push({
+        ...node,
+        firstName: userDetails.firstName || "",
+        lastName: userDetails.lastName || "",
+        children: node.children ? await enrichHierarchyWithUserDetails(node.children) : []
+      });
+    } catch (err) {
+      console.error(`Failed to fetch details for ${node.login}:`, err);
+      // Keep node with empty names if fetch fails
+      enriched.push({
+        ...node,
+        firstName: "",
+        lastName: "",
+        children: node.children ? await enrichHierarchyWithUserDetails(node.children) : []
+      });
+    }
+  }
+  
+  return enriched;
+};
+const findNodeByLogin=(nodes,login)=>{
+
+   for(const node of nodes){
+
+      if(node.login===login)
+         return node;
+
+      if(node.children?.length){
+
+         const found=
+           findNodeByLogin(
+              node.children,
+              login
+           );
+
+         if(found)
+            return found;
+      }
+   }
+
+   return null;
+}
+const convertToD3=(nodes)=>{
+
+ if(!nodes?.length) return null;
+
+ const build=(node)=>({
+    
+   name: node.login,
+
+   attributes:{
+      fullName:
+      `${node.firstName || ""} ${node.lastName || ""}`
+   },
+
+   hasChildren: node.hasChildren,
+
+   children:
+      node.children?.length
+      ? node.children.map(build)
+      : []
+
+ });
+
+ return build(nodes[0]);
+
+};
+
 const loadChildren = async (login) => {
 
   try {
@@ -340,14 +419,20 @@ const loadChildren = async (login) => {
     }));
 
     const res = await axios.get(
-      `https://user-extract.onrender.com/api/hierarchy/children/${login}`
+      `https://user-extract.onrender.com/api/hierarchy/children/${login}`,
+      { signal: hierarchyAbortController?.signal }
     );
-const children = Array.isArray(res.data)
-  ? res.data.map(c => ({
-      ...c,
-      children: c.children || []
-    }))
-  : [];
+    
+    // ✅ Enrich children with user details
+    let children = Array.isArray(res.data)
+      ? res.data.map(c => ({
+          ...c,
+          children: c.children || []
+        }))
+      : [];
+    
+    children = await enrichHierarchyWithUserDetails(children);
+    
     const updateTree = (nodes) => {
 
       return nodes.map(n => {
@@ -380,7 +465,10 @@ const children = Array.isArray(res.data)
 
   } catch (err) {
 
-    console.error(err);
+    // Don't log if it was aborted
+    if (err.name !== 'AbortError') {
+      console.error(err);
+    }
 
   } finally {
 
@@ -394,74 +482,62 @@ const searchHierarchyUser = async (searchLogin) => {
 
   if (!searchLogin) return;
 
+  // Check if we have an abort controller
+  if (!hierarchyAbortController) return;
+
   setSearchingHierarchy(true);
-  setHighlightedUser(searchLogin);
 
-  const expandedMap = {};
+  let foundPath = [];
+  let foundUser = null;
+  const pathNodes = {}; // Store all nodes on the found path
 
-  // recursive API traversal
-  const traverse = async (login, path = []) => {
+  // recursive API traversal to find the path
+  const traverse = async (login, path = [], node = null) => {
 
     // current path
     const currentPath = [...path, login];
 
-    // found target
-    if (
-      login.toLowerCase() ===
-      searchLogin.toLowerCase()
-    ) {
+    // Store this node for later reconstruction
+    pathNodes[login] = node;
 
-      currentPath.forEach(p => {
-        expandedMap[p] = true;
-      });
+    // Check if current node matches search (by login, firstName, lastName, or full name)
+    const fullName = node ? `${node.firstName || ""} ${node.lastName || ""}`.trim() : "";
+    const matchesSearch = 
+      login.toLowerCase() === searchLogin.toLowerCase() ||
+      (node?.firstName && node.firstName.toLowerCase().includes(searchLogin.toLowerCase())) ||
+      (node?.lastName && node.lastName.toLowerCase().includes(searchLogin.toLowerCase())) ||
+      (fullName && fullName.toLowerCase().includes(searchLogin.toLowerCase()));
 
+    if (matchesSearch) {
+      foundPath = currentPath;
+      foundUser = node || { login, firstName: "", lastName: "" };
       return true;
     }
 
     try {
 
-      // fetch children directly
+      // fetch children directly with abort signal
       const res = await axios.get(
-        `https://user-extract.onrender.com/api/hierarchy/children/${login}`
+        `https://user-extract.onrender.com/api/hierarchy/children/${login}`,
+        { signal: hierarchyAbortController.signal }
       );
 
-      const children = Array.isArray(res.data)
-        ? res.data
+      let children = Array.isArray(res.data)
+        ? res.data.map(c => ({
+            ...c,
+            children: c.children || []
+          }))
         : [];
 
-      // update tree visually
-      setHierarchyData(prev => {
-
-        const updateTree = (nodes) => {
-
-          return nodes.map(n => {
-
-            if (n.login === login) {
-
-              return {
-                ...n,
-                children
-              };
-            }
-
-            return {
-              ...n,
-              children: n.children
-                ? updateTree(n.children)
-                : []
-            };
-          });
-        };
-
-        return updateTree(prev);
-      });
+      children = await enrichHierarchyWithUserDetails(children);
 
       // search children
       for (const child of children) {
 
         const found = await traverse(
           child.login,
-          currentPath
+          currentPath,
+          child
         );
 
         if (found) return true;
@@ -469,7 +545,10 @@ const searchHierarchyUser = async (searchLogin) => {
 
     } catch (err) {
 
-      console.error(err);
+      // Don't log if it was aborted
+      if (err.name !== 'AbortError') {
+        console.error(err);
+      }
     }
 
     return false;
@@ -478,19 +557,69 @@ const searchHierarchyUser = async (searchLogin) => {
   // start from roots
   for (const root of hierarchyData) {
 
-    const found = await traverse(root.login);
+    const found = await traverse(root.login, [], root);
 
     if (found) break;
   }
 
-  // apply all expansions together
+  // If user not found, show error
+  if (foundPath.length === 0) {
+    setSearchingHierarchy(false);
+    alert(`User "${searchLogin}" not found in hierarchy ❌`);
+    setHighlightedUser("");
+    return;
+  }
+
+  // Highlight the found user with their name
+  setHighlightedUser(foundUser?.login || searchLogin);
+
+  // ✅ Build filtered hierarchy from the collected path nodes
+  const buildPathHierarchy = (path, nodesMap) => {
+    if (!path || path.length === 0) return [];
+
+    // Start with root
+    const root = nodesMap[path[0]];
+    if (!root) return [];
+
+    const buildNode = (login, depth) => {
+      const node = nodesMap[login];
+      if (!node) return null;
+
+      // Find next login in path
+      const currentIndex = path.indexOf(login);
+      const nextLogin = path[currentIndex + 1];
+
+      return {
+        ...node,
+        children: nextLogin ? [buildNode(nextLogin, depth + 1)] : []
+      };
+    };
+
+    return [buildNode(path[0], 0)].filter(Boolean);
+  };
+
+  const filteredHierarchy = buildPathHierarchy(foundPath, pathNodes);
+
+  // Set expanded for all nodes in the path
+  const expandedMap = {};
+  foundPath.forEach(login => {
+    expandedMap[login] = true;
+  });
+
+  setHierarchyData(filteredHierarchy);
   setExpanded(expandedMap);
 
   // force rerender
   setHierarchyKey(prev => prev + 1);
   setSearchingHierarchy(false);
+  
+  // Show success message with user details
+  const displayName = foundUser?.firstName || foundUser?.lastName 
+    ? `${foundUser.firstName} ${foundUser.lastName}`.trim() 
+    : foundUser?.login;
+  alert(`Found: ${displayName} ✅`);
 };
-const renderOrgTree = (node) => {
+/*const renderOrgTree = (node) => {
 
   const isExpanded = expanded[node.login];
 
@@ -519,7 +648,7 @@ const renderOrgTree = (node) => {
 
 </TreeNode>
   );
-};
+};*/
   // USERS
   useEffect(() => {
     setLoading(true);
@@ -987,6 +1116,216 @@ const handleMouseMove = (e) => {
 const handleMouseUp = () => {
   setIsPanning(false);
 };
+const HierarchyD3Node = ({
+  nodeDatum,
+  toggleNode,
+  hierarchyData,
+  loadChildren,
+  setHierarchyKey,
+  reloadAllData,
+  setLoading
+}) => {
+
+const [{ isDragging }, drag] = useDrag(() => ({
+  type: "USER",
+  item: {
+    login: nodeDatum.name,
+    id: nodeDatum.id
+  },
+  collect: (monitor) => ({
+    isDragging: !!monitor.isDragging()
+  })
+}));
+
+const [{ isOver }, drop] = useDrop(() => ({
+  accept: "USER",
+  collect: (monitor) => ({
+    isOver: !!monitor.isOver()
+  }),
+  drop: async (draggedItem) => {
+    try {
+      if (draggedItem.login === nodeDatum.name) return;
+
+      console.log("DROP:", draggedItem.login, "=>", nodeDatum.name);
+      setLoading(true);
+
+      const userRes = await axios.get(
+        `https://user-extract.onrender.com/api/user/${draggedItem.login}`
+      );
+
+      const user = userRes.data;
+      const target = findNodeByLogin(hierarchyData, nodeDatum.name);
+
+      if (!target) {
+        alert("Target not found");
+        return;
+      }
+
+      const payload = {
+        id: user.id,
+        login: user.login,
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        gpsimei: user.gpsimei || "",
+        activated: user.activated ?? true,
+        authorities: user.authorities || [],
+        geofences: user.geofences?.map(g => g.id || g) || [],
+        reportingTo: target.id,
+        langKey: user.langKey || "en"
+      };
+
+      console.log("PAYLOAD:", payload);
+
+      await axios.put(
+        "https://user-extract.onrender.com/api/edit-user",
+        payload
+      );
+
+      alert("Hierarchy updated ✅");
+      await reloadAllData();
+      setHierarchyKey(p => p + 1);
+
+    } catch (err) {
+      console.error("DROP ERROR:", err);
+      alert("Update failed ❌");
+    } finally {
+      setLoading(false);
+    }
+  }
+}));
+
+const hasChildren = nodeDatum.hasChildren || nodeDatum._children?.length;
+
+return (
+  <foreignObject
+    width="220"
+    height="100"
+    x="-110"
+    y="-40"
+    style={{
+      pointerEvents: "auto"
+    }}
+  >
+    <div
+      ref={(node) => {
+        drag(drop(node));
+      }}
+      onDragStart={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      style={{
+        background:
+          highlightedUser === nodeDatum.name
+            ? "#f59e0b"
+            : isOver
+            ? "#fbbf24"
+            : hasChildren
+            ? "#16a34a"
+            : "#2563eb",
+        padding: "12px",
+        borderRadius: "8px",
+        color: "white",
+        cursor: isDragging ? "grabbing" : "grab",
+        opacity: isDragging ? 0.5 : 1,
+        minWidth: "180px",
+        boxShadow: "0 4px 10px rgba(0,0,0,.25)",
+        transition: "background 0.2s ease",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        position: "relative"
+      }}
+      onClick={async (e) => {
+        e.stopPropagation();
+        
+        // Load children if they exist but haven't been fetched yet
+        if (nodeDatum.hasChildren && (!nodeDatum.children || nodeDatum.children.length === 0)) {
+          await loadChildren(nodeDatum.name);
+        }
+        
+        // Toggle the node expansion
+        if (toggleNode) {
+          toggleNode();
+        }
+      }}
+    >
+      {/* Main node info */}
+      <div style={{ textAlign: "center" }}>
+        <div style={{
+          fontWeight: "bold",
+          fontSize: "14px"
+        }}>
+          {nodeDatum.name}
+        </div>
+
+        <div style={{
+          fontSize: "11px",
+          marginTop: "4px"
+        }}>
+          {nodeDatum.attributes?.fullName || ""}
+        </div>
+      </div>
+
+      {/* Edit button */}
+      <button
+        onClick={async (e) => {
+          e.stopPropagation();
+          
+          // Fetch full user details
+          try {
+            const userRes = await axios.get(
+              `https://user-extract.onrender.com/api/user/${nodeDatum.name}`
+            );
+            const user = userRes.data;
+            
+            // Fetch reporting list if not already loaded
+            if (reportingListEdit.length === 0) {
+              const reportRes = await axios.get(
+                "https://user-extract.onrender.com/api/reporting-users"
+              );
+              setReportingListEdit(reportRes.data || []);
+            }
+            
+            openHierarchyEdit(user);
+          } catch (err) {
+            console.error("Error fetching user for edit:", err);
+            alert("Failed to load user details ❌");
+          }
+        }}
+        style={{
+          background: "rgba(255,255,255,0.3)",
+          border: "1px solid rgba(255,255,255,0.5)",
+          color: "white",
+          padding: "4px 8px",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontSize: "11px",
+          fontWeight: "bold",
+          marginTop: "6px",
+          transition: "all 0.2s ease",
+          alignSelf: "center"
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.background = "rgba(255,255,255,0.5)";
+          e.target.style.transform = "scale(1.05)";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.background = "rgba(255,255,255,0.3)";
+          e.target.style.transform = "scale(1)";
+        }}
+      >
+        ✎ Edit Reporting
+      </button>
+    </div>
+  </foreignObject>
+);
+
+};
 const reloadAllData = async () => {
 
   setLoading(true);
@@ -1005,11 +1344,14 @@ const reloadAllData = async () => {
     ]);
 
     setUsers(usersRes.data);
-   setHierarchyData(
-  Array.isArray(hierarchyRes.data)
-    ? hierarchyRes.data
-    : [hierarchyRes.data]
-);
+    
+    // ✅ Enrich hierarchy data with user details
+    let hierarchyDataRaw = Array.isArray(hierarchyRes.data)
+      ? hierarchyRes.data
+      : [hierarchyRes.data];
+    let enrichedData = await enrichHierarchyWithUserDetails(hierarchyDataRaw);
+    
+    setHierarchyData(enrichedData);
 
   } catch (err) {
 
@@ -1050,28 +1392,33 @@ const reloadAllData = async () => {
 
     <button
       style={styles.secondaryBtn}
-      onClick={() => {
+      onClick={async () => {
+  // Create new AbortController for this hierarchy session
+  const controller = new AbortController();
+  setHierarchyAbortController(controller);
+
   setShowHierarchy(true);
   setHierarchyLoading(true);
 
-  axios.get("https://user-extract.onrender.com/api/hierarchy/root")
-    .then(res => {
-
-  setHierarchyData(
-  Array.isArray(res.data)
-    ? res.data
-    : [res.data]
-);
-
-  
-})
+  try {
+    const res = await axios.get("https://user-extract.onrender.com/api/hierarchy/root", {
+      signal: controller.signal
+    });
     
-    .catch(err => {
+    // ✅ Enrich hierarchy data with user details
+    let hierarchyDataRaw = Array.isArray(res.data) ? res.data : [res.data];
+    let enrichedData = await enrichHierarchyWithUserDetails(hierarchyDataRaw);
+    
+    setHierarchyData(enrichedData);
+  } catch (err) {
+    if (err.name !== 'AbortError') {
       console.error("Hierarchy API error:", err);
       setHierarchyData([]); // prevent crash
       alert("Hierarchy API not available ❌");
-    })
-    .finally(() => setHierarchyLoading(false));
+    }
+  } finally {
+    setHierarchyLoading(false);
+  }
 }}
     >
        Hierarchy
@@ -1981,11 +2328,33 @@ const reloadAllData = async () => {
 
   <input
     type="text"
-    placeholder="Search user in hierarchy..."
+    placeholder="Search by login, first name, or last name..."
     value={hierarchySearch}
 
     onChange={(e) => {
       setHierarchySearch(e.target.value);
+      // Clear highlighting if search is cleared
+      if (!e.target.value.trim()) {
+        setHighlightedUser("");
+        // Reload full hierarchy when search is cleared
+        const reloadFullHierarchy = async () => {
+          try {
+            const res = await axios.get("https://user-extract.onrender.com/api/hierarchy", {
+              signal: hierarchyAbortController?.signal
+            });
+            let hierarchyList = Array.isArray(res.data) ? res.data : [];
+            hierarchyList = await enrichHierarchyWithUserDetails(hierarchyList);
+            setHierarchyData(hierarchyList);
+            setExpanded({});
+            setHierarchyKey(prev => prev + 1);
+          } catch (err) {
+            if (err.name !== 'AbortError') {
+              console.error("Error reloading hierarchy:", err);
+            }
+          }
+        };
+        reloadFullHierarchy();
+      }
     }}
 
     onKeyDown={async (e) => {
@@ -2048,7 +2417,20 @@ const reloadAllData = async () => {
       <div style={{ display: "flex", gap: "10px" }}>
         <button onClick={() => setZoom(z => Math.min(z + 0.1, 2))}>➕</button>
         <button onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))}>➖</button>
-        <button onClick={() => setShowHierarchy(false)}>❌ Close</button>
+        <button onClick={() => {
+          // Abort all pending API requests
+          if (hierarchyAbortController) {
+            hierarchyAbortController.abort();
+            setHierarchyAbortController(null);
+          }
+          
+          setShowHierarchy(false);
+          setHighlightedUser("");
+          setHierarchySearch("");
+          setExpanded({});
+          setSearchingHierarchy(false);
+          setHierarchyData([]);
+        }}>❌ Close</button>
       </div>
     </div>
 
@@ -2086,22 +2468,60 @@ const reloadAllData = async () => {
     }}
   >
 
-    <DndProvider backend={HTML5Backend}>
+  {hierarchyData?.length > 0 && (
 
-      <Tree
-        key={hierarchyKey}
-        lineWidth={"2px"}
-        lineColor={"#ccc"}
-        lineBorderRadius={"10px"}
-        label={<div></div>}
-      >
-        {hierarchyData.map(node => renderOrgTree(node))}
-      </Tree>
+<DndProvider backend={HTML5Backend}>
 
-    </DndProvider>
+<div
+  style={{
+    width:"100%",
+    height:"80vh"
+  }}
+>
 
-  </div>
+<Tree
+  data={convertToD3(hierarchyData)}
+  orientation="vertical"
+  pathFunc="diagonal"
 
+  translate={{
+    x:650,
+    y:100
+  }}
+
+  nodeSize={{
+    x:250,
+    y:140
+  }}
+
+  separation={{
+    siblings:1.2,
+    nonSiblings:1.5
+  }}
+
+  renderCustomNodeElement={({nodeDatum,toggleNode})=>(
+
+<g>
+  <HierarchyD3Node
+     nodeDatum={nodeDatum}
+     toggleNode={toggleNode}
+     hierarchyData={hierarchyData}
+     loadChildren={loadChildren}
+     setHierarchyKey={setHierarchyKey}
+     reloadAllData={reloadAllData}
+     setLoading={setLoading}
+  />
+</g>
+)}
+/>
+
+</div>
+
+</DndProvider>
+
+)}
+
+</div>
 </div>
 </div>
 )}
