@@ -650,29 +650,42 @@ const searchHierarchyUser = async (searchLogin) => {
   );
 };*/
   // USERS
-  useEffect(() => {
-    setLoading(true);
+  useEffect(()=>{
 
-    axios.get("https://user-extract.onrender.com/api/users-summary")
-      .then(res => {
-        setUsers(res.data);
+fetchUsers();
 
-        const roleSet = new Set();
-        const reportingSet = new Set();
+},[page,size]);
 
-        res.data.forEach(u => {
-          u.roles?.forEach(r => roleSet.add(r));
-          if (u.reportingTo) reportingSet.add(u.reportingTo);
-        });
+const fetchUsers=async()=>{
 
-        const rolesArr = [...roleSet];
-        setRoles(rolesArr);
-        setSelectedRoles(rolesArr);
+setLoading(true);
 
-        setReportingList([...reportingSet]);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+try{
+
+const res=
+await axios.get(
+`https://user-extract.onrender.com/api/users-summary?page=${page}&size=${size}`
+);
+
+setUsers(
+res.data.content||[]
+);
+
+setTotalUsers(
+res.data.totalElements||0
+);
+
+}catch(err){
+
+console.log(err);
+
+}finally{
+
+setLoading(false);
+
+}
+
+}
   useEffect(() => {
   const reopen = localStorage.getItem("reopenHierarchy");
 
