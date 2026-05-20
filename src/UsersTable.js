@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -9,7 +9,51 @@ import { HTML5Backend } from "react-dnd-html5-backend";
 
 import { FaEye, FaEdit } from "react-icons/fa";
 
+let styles;
 
+const UserRow = React.memo(({ u, isSelected, onToggleSelected, onView, onEdit }) => (
+  <tr
+    style={styles.tr}
+    onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
+    onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
+  >
+    <td style={styles.td}>
+      <input
+        type="checkbox"
+        checked={isSelected}
+        onChange={(e) => onToggleSelected(u.login, e.target.checked)}
+      />
+    </td>
+    <td style={styles.td}>{u.login}</td>
+    <td style={styles.td}>{u.name}</td>
+    <td style={styles.td}>{u.phone}</td>
+    <td style={{ ...styles.td, color: u.activated ? "green" : "red", fontWeight: "bold" }}>
+      {u.activated ? "Active" : "Inactive"}
+    </td>
+    <td style={styles.td}>
+      {u.roles?.map((r, idx) => (
+        <div key={idx}>{r}</div>
+      ))}
+    </td>
+    <td style={styles.td}>{u.version}</td>
+    <td style={styles.td}>{u.reportingTo}</td>
+    <td style={styles.td}>
+      <div style={styles.geoBox}>
+        {u.geofenceNames?.map((g, idx) => (
+          <div key={idx}>{typeof g === "string" ? g : ""}</div>
+        ))}
+      </div>
+    </td>
+    <td style={styles.td}>
+      <button className="icon-btn view" onClick={() => onView(u)} title="View User">
+        <FaEye />
+      </button>
+      <button className="icon-btn edit" onClick={() => onEdit(u)} title="Edit User">
+        <FaEdit />
+      </button>
+    </td>
+  </tr>
+));
 
 // ✅ SAFE HELPER: ensures a block is valid and has a plain string name
 const isValidBlock = (b) =>
@@ -26,7 +70,8 @@ function UsersTable() {
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
 
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedReportingTo, setSelectedReportingTo] = useState("");
 
   
@@ -53,7 +98,7 @@ function UsersTable() {
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showBlockDropdown, setShowBlockDropdown] = useState(false);
 
-  const [currentPage, setCurrentPage] = useState(1);
+ 
   
   const [editUser, setEditUser] = useState(null);
 
@@ -70,7 +115,7 @@ const [showBulkPopup, setShowBulkPopup] = useState(false);
 const [updatedUsers, setUpdatedUsers] = useState([]);
 const [showBulkDropdown, setShowBulkDropdown] = useState(false);
 const [bulkReportSearch, setBulkReportSearch] = useState("");
-const [usersPerPage, setUsersPerPage] = useState(10);
+
 const [showFilters, setShowFilters] = useState(false);
 const [showHierarchy, setShowHierarchy] = useState(false);
 const [hierarchyData, setHierarchyData] = useState([]);
@@ -94,6 +139,12 @@ const [hierarchySearch, setHierarchySearch] = useState("");
 const [highlightedUser, setHighlightedUser] = useState("");
 const [searchingHierarchy, setSearchingHierarchy] = useState(false);
 const [hierarchyAbortController, setHierarchyAbortController] = useState(null);
+const [totalUsers,setTotalUsers]=useState(0);
+const loadedUsers = useRef(new Set());
+
+const [page,setPage]=useState(0);
+
+const [size,setSize]=useState(10);
 
 const openHierarchyEdit = (node) => {
   setHierarchyEditUser(node);
@@ -327,34 +378,60 @@ alert("Updated Successfully ✅");
 
 // ✅ Enrich hierarchy nodes with user details (firstName, lastName)
 const enrichHierarchyWithUserDetails = async (nodes) => {
-  const enriched = [];
-  
-  for (const node of nodes) {
-    try {
-      const userRes = await axios.get(
-        `https://user-extract.onrender.com/api/user/${node.login}`
+
+  const enriched=[];
+
+  for(const node of nodes){
+
+    try{
+
+      const userRes=
+      await axios.get(
+      `https://user-extract.onrender.com/api/user/${node.login}`
       );
-      const userDetails = userRes.data;
-      
+
+      const userDetails=
+      userRes.data;
+
       enriched.push({
+
         ...node,
-        firstName: userDetails.firstName || "",
-        lastName: userDetails.lastName || "",
-        children: node.children ? await enrichHierarchyWithUserDetails(node.children) : []
+
+        firstName:
+        userDetails.firstName || "",
+
+        lastName:
+        userDetails.lastName || "",
+
+        // avoid recursion explosion
+        children:
+        node.children || []
+
       });
-    } catch (err) {
-      console.error(`Failed to fetch details for ${node.login}:`, err);
-      // Keep node with empty names if fetch fails
+
+    }catch(err){
+
+      console.error(err);
+
       enriched.push({
+
         ...node,
-        firstName: "",
-        lastName: "",
-        children: node.children ? await enrichHierarchyWithUserDetails(node.children) : []
+
+        firstName:"",
+
+        lastName:"",
+
+        children:
+        node.children || []
+
       });
+
     }
+
   }
-  
+
   return enriched;
+
 };
 const findNodeByLogin=(nodes,login)=>{
 
@@ -380,23 +457,30 @@ const findNodeByLogin=(nodes,login)=>{
 }
 const convertToD3=(nodes)=>{
 
- if(!nodes?.length) return null;
+ if(!nodes?.length)
+ return null;
 
  const build=(node)=>({
 
-   name: node.login,
+   id:node.id,
+
+   login:node.login,
+
+   name:node.login,
 
    attributes:{
       fullName:
-      `${node.firstName || ""} ${node.lastName || ""}`
+      `${node.firstName || ""}
+      ${node.lastName || ""}`
    },
 
-   hasChildren: node.hasChildren,
+   hasChildren:
+   node.hasChildren,
 
    children:
-      node.children?.length
-      ? node.children.map(build)
-      : []
+   node.children?.length
+   ?node.children.map(build)
+   :[]
 
  });
 
@@ -404,10 +488,14 @@ const convertToD3=(nodes)=>{
 
 };
 
-const loadChildren = async (login) => {
+const loadChildren = useCallback(async (login) => {
+  if (loadedUsers.current.has(login)) {
+    return;
+  }
+
+  loadedUsers.current.add(login);
 
   try {
-
     setLoadingNodes(prev => ({
       ...prev,
       [login]: true
@@ -429,11 +517,8 @@ const loadChildren = async (login) => {
     children = await enrichHierarchyWithUserDetails(children);
     
     const updateTree = (nodes) => {
-
       return nodes.map(n => {
-
         if (n.login === login) {
-
           return {
             ...n,
             children
@@ -441,7 +526,6 @@ const loadChildren = async (login) => {
         }
 
         if (n.children) {
-
           return {
             ...n,
             children: updateTree(n.children)
@@ -453,26 +537,20 @@ const loadChildren = async (login) => {
     };
 
     setHierarchyData(prev => [...updateTree(prev)]);
-    await new Promise(resolve =>
-  setTimeout(resolve, 200)
-);
+    await new Promise(resolve => setTimeout(resolve, 200));
     setHierarchyKey(prev => prev + 1);
 
   } catch (err) {
-
-    // Don't log if it was aborted
     if (err.name !== 'AbortError') {
       console.error(err);
     }
-
   } finally {
-
     setLoadingNodes(prev => ({
       ...prev,
       [login]: false
     }));
   }
-};
+}, [hierarchyAbortController]);
 const searchHierarchyUser = async (searchLogin) => {
 
   if (!searchLogin) return;
@@ -517,14 +595,15 @@ const searchHierarchyUser = async (searchLogin) => {
         { signal: hierarchyAbortController.signal }
       );
 
-      let children = Array.isArray(res.data)
-        ? res.data.map(c => ({
-            ...c,
-            children: c.children || []
-          }))
-        : [];
+      
 
-      children = await enrichHierarchyWithUserDetails(children);
+      let children =
+Array.isArray(res.data)
+?res.data.map(c=>({
+...c,
+children:[]
+}))
+:[];
 
       // search children
       for (const child of children) {
@@ -645,38 +724,99 @@ const searchHierarchyUser = async (searchLogin) => {
   );
 };*/
   // USERS
-  useEffect(() => {
+ // USERS
+useEffect(() => {
+  fetchUsers();
+}, [page, size]);
+
+const fetchUsers = async () => {
+
+  try {
+
     setLoading(true);
 
-    axios.get("https://user-extract.onrender.com/api/users-summary")
-      .then(res => {
-        setUsers(res.data);
+    const cb = Date.now();
 
-        const roleSet = new Set();
-        const reportingSet = new Set();
+    const res = await axios.get(
+      `https://user-extract.onrender.com/api/users-summary?cacheBuster=${cb}&page=${page}&size=${size}&sort=last_modified_date,desc`
+    );
 
-        res.data.forEach(u => {
-          u.roles?.forEach(r => roleSet.add(r));
-          if (u.reportingTo) reportingSet.add(u.reportingTo);
-        });
+    console.log("PAGINATED:", res.data);
 
-        const rolesArr = [...roleSet];
-        setRoles(rolesArr);
-        setSelectedRoles(rolesArr);
+    // Normalize response: API sometimes returns paginated shape or a plain array
+    const content = Array.isArray(res.data)
+      ? res.data
+      : Array.isArray(res.data?.content)
+      ? res.data.content
+      : [];
 
-        setReportingList([...reportingSet]);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-  useEffect(() => {
-  const reopen = localStorage.getItem("reopenHierarchy");
+    const total = Number(res.data?.totalElements) || (Array.isArray(res.data) ? content.length : 0);
 
-  if (reopen === "true") {
-    setShowHierarchy(true);
+    setTotalUsers(total);
 
-    localStorage.removeItem("reopenHierarchy");
+    // Calculate last available page (0-based)
+    const lastPage = Math.max(0, Math.ceil(total / size) - 1);
+
+    // If we requested a page beyond the last available, step back to lastPage
+    if (content.length === 0 && page > 0 && page > lastPage) {
+      console.warn(`Requested page ${page} beyond last page ${lastPage}, resetting page.`);
+      setPage(lastPage);
+      return; // caller effect will re-trigger fetch with corrected page
+    }
+
+    setUsers(content);
+
+    // roles
+    const roleSet = new Set();
+
+    const reportingSet = new Set();
+
+    (res.data.content || []).forEach(u => {
+
+      u.roles?.forEach(
+        r => roleSet.add(r)
+      );
+
+      if (u.reportingTo)
+        reportingSet.add(
+          u.reportingTo
+        );
+
+    });
+
+    setRoles([
+      ...roleSet
+    ]);
+
+    setReportingList([
+      ...reportingSet
+    ]);
+
+  } catch (err) {
+
+    console.error("Error fetching users:", err);
+
+    // If API unavailable, ensure UI doesn't continue to show stale pagination
+    if (page > 0) setPage(0);
+
+    setUsers([]);
+    setTotalUsers(0);
+
+  } finally {
+
+    setLoading(false);
+
   }
-}, []);
+
+};
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // DISTRICTS
   useEffect(() => {
@@ -719,42 +859,59 @@ const searchHierarchyUser = async (searchLogin) => {
 
   // RESET PAGE
   useEffect(() => {
-    setCurrentPage(1);
-  }, [search, selectedReportingTo, selectedDistrict, selectedRoles, selectedBlocks]);
+    setPage(0);
+  }, [debouncedSearch, selectedReportingTo, selectedDistrict, selectedRoles, selectedBlocks]);
 
   // FILTER
-  const filteredUsers = users.length === 0 ? [] : users.filter(user => {
+  const filteredUsers = useMemo(() => {
+    if (!users || users.length === 0) return [];
 
-    const searchText = search.toLowerCase();
+    return users.filter(user => {
+      const searchText = debouncedSearch.toLowerCase();
 
-    const matchSearch =
-      user.login?.toLowerCase().includes(searchText) ||
-      (user.name && user.name.toLowerCase().includes(searchText)) ||
-      (user.phone && user.phone.toString().toLowerCase().includes(searchText));
+      const matchSearch =
+        user.login?.toLowerCase().includes(searchText) ||
+        (user.name && user.name.toLowerCase().includes(searchText)) ||
+        (user.phone && user.phone.toString().toLowerCase().includes(searchText));
 
-    const matchReporting =
-      !selectedReportingTo || user.reportingTo === selectedReportingTo;
+      const matchReporting =
+        !selectedReportingTo || user.reportingTo === selectedReportingTo;
 
-    const matchRoles =
-      selectedRoles.length === 0 ||
-      selectedRoles.some(r => user.roles?.includes(r));
+      const matchRoles =
+        selectedRoles.length === 0 ||
+        selectedRoles.some(r => user.roles?.includes(r));
 
-    const matchBlocks =
-      !selectedDistrict ||
-      (Array.isArray(selectedBlocks) && selectedBlocks.length > 0 &&
-        selectedBlocks.some(id => {
-          const block = Array.isArray(blocks) && blocks.find(b => b.id === id);
-          return block && typeof block.name === "string" && user.geofenceNames?.includes(block.name);
-        }));
+      const matchBlocks =
+        !selectedDistrict ||
+        (Array.isArray(selectedBlocks) && selectedBlocks.length > 0 &&
+          selectedBlocks.some(id => {
+            const block = Array.isArray(blocks) && blocks.find(b => b.id === id);
+            return block && typeof block.name === "string" && user.geofenceNames?.includes(block.name);
+          }));
 
-    const matchDistrict =
-      !selectedDistrict ||
-      (Array.isArray(blocks) && blocks.some(b =>
-        typeof b.name === "string" && user.geofenceNames?.includes(b.name)
-      ));
+      const matchDistrict =
+        !selectedDistrict ||
+        (Array.isArray(blocks) && blocks.some(b =>
+          typeof b.name === "string" && user.geofenceNames?.includes(b.name)
+        ));
 
-    return matchSearch && matchReporting && matchRoles && matchBlocks && matchDistrict;
-  });
+      return matchSearch && matchReporting && matchRoles && matchBlocks && matchDistrict;
+    });
+  }, [users, debouncedSearch, selectedReportingTo, selectedDistrict, selectedRoles, selectedBlocks, blocks]);
+
+  const totalPages = useMemo(() => Math.ceil(totalUsers / size), [totalUsers, size]);
+  const currentUsers = useMemo(() => filteredUsers, [filteredUsers]);
+
+  const toggleUserSelection = useCallback((login, checked) => {
+    setSelectedUsers(prev =>
+      checked
+        ? prev.includes(login)
+          ? prev
+          : [...prev, login]
+        : prev.filter(l => l !== login)
+    );
+  }, []);
+
   const cleanStyles = {
   modalOverlay: {
     position: "fixed",
@@ -850,11 +1007,6 @@ const searchHierarchyUser = async (searchLogin) => {
   }
 };
 
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
-  const currentUsers = filteredUsers.slice(
-    (currentPage - 1) * usersPerPage,
-    currentPage * usersPerPage
-  );
  const handleBulkUpdate = async () => {
 
   if (selectedUsers.length === 0) {
@@ -892,14 +1044,12 @@ const searchHierarchyUser = async (searchLogin) => {
   }
 };
 
-  const openEditModal = (user) => {
-
+  const openEditModal = useCallback((user) => {
     setLoadingRoles(true);
     setLoadingReporting(true);
 
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => {
-
         const fullUser = res.data;
 
         const cleanUser = {
@@ -918,7 +1068,6 @@ const searchHierarchyUser = async (searchLogin) => {
         };
 
         setEditUser(cleanUser);
-
         setSelectedRolesEdit(cleanUser.authorities || []);
         setEditBlockSearch("");
         setEditRoleSearch("");
@@ -930,30 +1079,20 @@ const searchHierarchyUser = async (searchLogin) => {
           : [];
         setSelectedBlocks(geoIds);
 
-        // Fetch Blocks for edit modal
         axios.get("https://user-extract.onrender.com/api/geofences")
-  .then(res => {
+          .then(res => {
+            const masters = Array.isArray(res.data?.masters) ? res.data.masters : [];
+            const minis = Array.isArray(res.data?.minis) ? res.data.minis : [];
+            const allBlocks = [...masters, ...minis];
+            const validBlocks = allBlocks.filter(isValidBlock);
+            setBlocks(validBlocks);
+            console.log("BLOCKS LOADED:", validBlocks.length);
+          })
+          .catch(err => {
+            console.error("Error loading blocks:", err);
+            setBlocks([]);
+          });
 
-    const masters = Array.isArray(res.data?.masters) ? res.data.masters : [];
-const minis = Array.isArray(res.data?.minis) ? res.data.minis : [];
-
-
-const allBlocks = [...masters, ...minis];
-
-// ✅ apply validation
-const validBlocks = allBlocks.filter(isValidBlock);
-
-setBlocks(validBlocks);
-
-console.log("BLOCKS LOADED:", validBlocks.length);
-
-   
-  })
-  .catch(err => {
-    console.error("Error loading blocks:", err);
-    setBlocks([]);
-  });
-        // Fetch Roles
         axios.get("https://user-extract.onrender.com/api/roles")
           .then(res => {
             console.log("ROLES API RESPONSE:", res.data);
@@ -965,18 +1104,15 @@ console.log("BLOCKS LOADED:", validBlocks.length);
           })
           .finally(() => setLoadingRoles(false));
 
-        // Fetch Reporting
         axios.get("https://user-extract.onrender.com/api/reporting-users")
           .then(res => {
             const list = Array.isArray(res.data) ? res.data : [];
             setReportingListEdit(list);
-
             const reportingId = cleanUser.ownedBy?.[0]?.id;
             const selected = list.find(x => x.id === reportingId);
             setSelectedReportingEdit(selected || null);
           })
           .finally(() => setLoadingReporting(false));
-
       })
       .catch(err => {
         console.error("Error loading user:", err);
@@ -984,7 +1120,7 @@ console.log("BLOCKS LOADED:", validBlocks.length);
         setLoadingRoles(false);
         setLoadingReporting(false);
       });
-  };
+  }, []);
 
   const handleUpdate = async () => {
 
@@ -1045,12 +1181,12 @@ console.log("BLOCKS LOADED:", validBlocks.length);
   }
 };
 
-  const handleUserClick = (user) => {
+  const handleUserClick = useCallback((user) => {
     axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
       .then(res => setSelectedUser(res.data));
-  };
+  }, []);
 
-  const downloadAll = () => {
+  const downloadAll = useCallback(() => {
     setDownloading(true);
 
     const dataToExport = filteredUsers.map(u => ({
@@ -1072,7 +1208,7 @@ console.log("BLOCKS LOADED:", validBlocks.length);
     saveAs(new Blob([buffer]), "Filtered_Users.xlsx");
 
     setDownloading(false);
-  };
+  }, [filteredUsers]);
  
 const handleWheel = (e) => {
 
@@ -1223,14 +1359,17 @@ return (
         padding: "12px",
         borderRadius: "8px",
         color: "white",
-        textAlign: "center",
         cursor: isDragging ? "grabbing" : "grab",
         opacity: isDragging ? 0.5 : 1,
         minWidth: "180px",
         boxShadow: "0 4px 10px rgba(0,0,0,.25)",
         transition: "background 0.2s ease",
         userSelect: "none",
-        WebkitUserSelect: "none"
+        WebkitUserSelect: "none",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        position: "relative"
       }}
       onClick={async (e) => {
         e.stopPropagation();
@@ -1246,19 +1385,73 @@ return (
         }
       }}
     >
-      <div style={{
-        fontWeight: "bold",
-        fontSize: "14px"
-      }}>
-        {nodeDatum.name}
+      {/* Main node info */}
+      <div style={{ textAlign: "center" }}>
+        <div style={{
+          fontWeight: "bold",
+          fontSize: "14px"
+        }}>
+          {nodeDatum.name}
+        </div>
+
+        <div style={{
+          fontSize: "11px",
+          marginTop: "4px"
+        }}>
+          {nodeDatum.attributes?.fullName || ""}
+        </div>
       </div>
 
-      <div style={{
-        fontSize: "11px",
-        marginTop: "4px"
-      }}>
-        {nodeDatum.attributes?.fullName || ""}
-      </div>
+      {/* Edit button */}
+      <button
+        onClick={async (e) => {
+          e.stopPropagation();
+          
+          // Fetch full user details
+          try {
+            const userRes = await axios.get(
+              `https://user-extract.onrender.com/api/user/${nodeDatum.name}`
+            );
+            const user = userRes.data;
+            
+            // Fetch reporting list if not already loaded
+            if (reportingListEdit.length === 0) {
+              const reportRes = await axios.get(
+                "https://user-extract.onrender.com/api/reporting-users"
+              );
+              setReportingListEdit(reportRes.data || []);
+            }
+            
+            openHierarchyEdit(user);
+          } catch (err) {
+            console.error("Error fetching user for edit:", err);
+            alert("Failed to load user details ❌");
+          }
+        }}
+        style={{
+          background: "rgba(255,255,255,0.3)",
+          border: "1px solid rgba(255,255,255,0.5)",
+          color: "white",
+          padding: "4px 8px",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontSize: "11px",
+          fontWeight: "bold",
+          marginTop: "6px",
+          transition: "all 0.2s ease",
+          alignSelf: "center"
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.background = "rgba(255,255,255,0.5)";
+          e.target.style.transform = "scale(1.05)";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.background = "rgba(255,255,255,0.3)";
+          e.target.style.transform = "scale(1)";
+        }}
+      >
+        ✎ Edit Reporting
+      </button>
     </div>
   </foreignObject>
 );
@@ -1270,36 +1463,62 @@ const reloadAllData = async () => {
 
   try {
 
-    const cb = Date.now();
+    const cb=Date.now();
 
-    const [usersRes, hierarchyRes] = await Promise.all([
+    const [usersRes,hierarchyRes]=
+    await Promise.all([
+
       axios.get(
-        `https://user-extract.onrender.com/api/users-summary?cb=${cb}`
+      `https://user-extract.onrender.com/api/users-summary?page=${page}&size=${size}&cb=${cb}`
       ),
+
       axios.get(
-        `https://user-extract.onrender.com/api/hierarchy/root?cb=${cb}`
+      `https://user-extract.onrender.com/api/hierarchy/root?cb=${cb}`
       )
+
     ]);
 
-    setUsers(usersRes.data);
-    
-    // ✅ Enrich hierarchy data with user details
-    let hierarchyDataRaw = Array.isArray(hierarchyRes.data)
-      ? hierarchyRes.data
-      : [hierarchyRes.data];
-    let enrichedData = await enrichHierarchyWithUserDetails(hierarchyDataRaw);
-    
-    setHierarchyData(enrichedData);
+    const usersContent = Array.isArray(usersRes.data)
+      ? usersRes.data
+      : Array.isArray(usersRes.data?.content)
+      ? usersRes.data.content
+      : [];
 
-  } catch (err) {
+    const usersTotal = Number(usersRes.data?.totalElements) || (Array.isArray(usersRes.data) ? usersContent.length : 0);
+
+    setTotalUsers(usersTotal);
+
+    const lastPage = Math.max(0, Math.ceil(usersTotal / size) - 1);
+    if (usersContent.length === 0 && page > 0 && page > lastPage) {
+      setPage(lastPage);
+      // allow effect to refetch with corrected page
+      return;
+    }
+
+    setUsers(usersContent);
+
+    setHierarchyData(
+
+      Array.isArray(
+      hierarchyRes.data
+      )
+
+      ? hierarchyRes.data
+
+      : [hierarchyRes.data]
+
+    );
+
+  } catch(err){
 
     console.error(err);
 
-  } finally {
+  } finally{
 
     setLoading(false);
 
   }
+
 };
 
   return (
@@ -1314,8 +1533,8 @@ const reloadAllData = async () => {
     <input
       placeholder="Search users..."
       style={styles.searchInput}
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
+      value={searchInput}
+      onChange={(e) => setSearchInput(e.target.value)}
     />
   </div>
 
@@ -1345,9 +1564,13 @@ const reloadAllData = async () => {
     
     // ✅ Enrich hierarchy data with user details
     let hierarchyDataRaw = Array.isArray(res.data) ? res.data : [res.data];
-    let enrichedData = await enrichHierarchyWithUserDetails(hierarchyDataRaw);
-    
-    setHierarchyData(enrichedData);
+    setHierarchyData(
+Array.isArray(
+hierarchyDataRaw
+)
+?hierarchyDataRaw
+:[hierarchyDataRaw]
+);
   } catch (err) {
     if (err.name !== 'AbortError') {
       console.error("Hierarchy API error:", err);
@@ -1715,69 +1938,15 @@ const reloadAllData = async () => {
         </thead>
 
         <tbody>
-          {currentUsers.map((u, i) => (
-            
-            <tr key={i}
-              style={styles.tr}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "white"}>
-                <td style={styles.td}>
-    <input
-      type="checkbox"
-      checked={selectedUsers.includes(u.login)}
-      onChange={(e) => {
-        if (e.target.checked) {
-          setSelectedUsers(prev => [...prev, u.login]);
-        } else {
-          setSelectedUsers(prev => prev.filter(l => l !== u.login));
-        }
-      }}
-    />
-  </td>
-
-              <td style={styles.td}>{u.login}</td>
-              <td style={styles.td}>{u.name}</td>
-              <td style={styles.td}>{u.phone}</td>
-
-              <td style={{ ...styles.td, color: u.activated ? "green" : "red", fontWeight: "bold" }}>
-                {u.activated ? "Active" : "Inactive"}
-              </td>
-
-              <td style={styles.td}>
-                {u.roles?.map((r, i) => <div key={i}>{r}</div>)}
-              </td>
-
-              <td style={styles.td}>{u.version}</td>
-              <td style={styles.td}>{u.reportingTo}</td>
-
-              <td style={styles.td}>
-                <div style={styles.geoBox}>
-                  {u.geofenceNames?.map((g, i) => (
-                    <div key={i}>{typeof g === "string" ? g : ""}</div>
-                  ))}
-                </div>
-              </td>
-
-              <td style={styles.td}>
-                <button
-    className="icon-btn view"
-    onClick={() => handleUserClick(u)}
-    title="View User"
-  >
-    <FaEye />
-  </button>
-
-                 <button
-    className="icon-btn edit"
-    onClick={() => openEditModal(u)}
-    title="Edit User"
-  >
-    <FaEdit />
-  </button>
-              </td>
-              
-
-            </tr>
+          {currentUsers.map(u => (
+            <UserRow
+              key={u.login}
+              u={u}
+              isSelected={selectedUsers.includes(u.login)}
+              onToggleSelected={toggleUserSelection}
+              onView={handleUserClick}
+              onEdit={openEditModal}
+            />
           ))}
         </tbody>
       </table>
@@ -1792,10 +1961,13 @@ const reloadAllData = async () => {
     <div>
       Page size{" "}
       <select
-        value={usersPerPage}
+        value={size}
         onChange={(e) => {
-          setCurrentPage(1);
-          setUsersPerPage(Number(e.target.value));
+          setPage(0);
+
+setSize(
+Number(e.target.value)
+)
         }}
         style={styles.select}
       >
@@ -1806,18 +1978,50 @@ const reloadAllData = async () => {
     </div>
 
     {/* Showing Count */}
-    <div>
-      Showing{" "}
-      {filteredUsers.length === 0
-        ? 0
-        : (currentPage - 1) * usersPerPage + 1}
-      {" - "}
-      {Math.min(currentPage * usersPerPage, filteredUsers.length)}
-      {" of "}
-      {filteredUsers.length} items.
-    </div>
+<div>
+  Showing
+{totalUsers===0
+?0
+:page*size+1}
+-
+{Math.min(
+(page+1)*size,
+totalUsers
+)}
+of
+{totalUsers}
+</div>
 
-  </div>
+{/* Navigation buttons */}
+<div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+  <button 
+    disabled={page === 0} 
+    onClick={() => setPage(0)}
+  >
+    First
+  </button>
+  <button 
+    disabled={page === 0} 
+    onClick={() => setPage(prev => Math.max(0, prev - 1))}
+  >
+    Previous
+  </button>
+  
+  <span>Page {page + 1} of {totalPages || 1}</span>
+  
+  <button 
+    disabled={page >= totalPages - 1} 
+    onClick={() => setPage(prev => Math.min(totalPages - 1, prev + 1))}
+  >
+    Next
+  </button>
+  <button 
+    disabled={page >= totalPages - 1} 
+    onClick={() => setPage(totalPages - 1)}
+  >
+    Last
+  </button>
+</div>
 
   {/* RIGHT SIDE */}
   <div style={styles.paginationRight}>
@@ -1829,11 +2033,11 @@ const reloadAllData = async () => {
         type="number"
         min="1"
         max={totalPages}
-        value={currentPage}
+        value={page+1}
         onChange={(e) => {
           const page = Number(e.target.value);
           if (page >= 1 && page <= totalPages) {
-            setCurrentPage(page);
+            setPage(page-1)
           }
         }}
         style={styles.gotoInput}
@@ -1846,22 +2050,27 @@ const reloadAllData = async () => {
       {/* Prev */}
       <button
         style={styles.pageBtn}
-        onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+        onClick={() =>setPage(
+p=>Math.max(p-1,0)
+)}
       >
         ‹
       </button>
 
       {/* Numbers */}
       {[...Array(totalPages).keys()]
-        .slice(Math.max(0, currentPage - 3), currentPage + 2)
+        .slice(
+Math.max(0,page-2),
+page+3
+)
         .map(i => (
           <button
             key={i}
-            onClick={() => setCurrentPage(i + 1)}
+            onClick={() => setPage(i)}
             style={{
               ...styles.pageNumber,
-              backgroundColor: currentPage === i + 1 ? "#f97316" : "white",
-              color: currentPage === i + 1 ? "white" : "black"
+              backgroundColor: page === i  ? "#f97316" : "white",
+              color: page === i  ? "white" : "black"
             }}
           >
             {i + 1}
@@ -1871,7 +2080,12 @@ const reloadAllData = async () => {
       {/* Next */}
       <button
         style={styles.pageBtn}
-        onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+        onClick={() => setPage(
+p=>Math.min(
+p+1,
+totalPages-1
+)
+)}
       >
         ›
       </button>
@@ -1879,6 +2093,7 @@ const reloadAllData = async () => {
     </div>
   </div>
 
+</div>
 </div>
 
       {/* VIEW MODAL */}
@@ -2512,10 +2727,12 @@ const reloadAllData = async () => {
                 <div
                   key={r.id}
                   style={{
-                    ...cleanStyles.listItem,
-                    background:
-                      hierarchyReporting == r.id ? "#e0f2fe" : "white"
-                  }}
+   ...cleanStyles.listItem,
+   background:
+      hierarchyReporting == r.id
+      ? "#e0f2fe"
+      : "white"
+}}
                   onClick={() => {
                     setHierarchyReporting(r.id);
                     setShowHierarchyDropdown(false);
@@ -2559,12 +2776,10 @@ const reloadAllData = async () => {
 )}
       
     </div>
+    
   );
-
 }
-
-
-const styles = {
+styles = {
   page: { padding: "20px" },
   filters: {
   display: "grid",
@@ -2890,5 +3105,6 @@ spinner: {
   animation: "spin 1s linear infinite"
 }
 };
+
 
 export default UsersTable;
