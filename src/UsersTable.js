@@ -94,11 +94,6 @@ const [hierarchySearch, setHierarchySearch] = useState("");
 const [highlightedUser, setHighlightedUser] = useState("");
 const [searchingHierarchy, setSearchingHierarchy] = useState(false);
 const [hierarchyAbortController, setHierarchyAbortController] = useState(null);
-const [totalUsers,setTotalUsers]=useState(0);
-
-const [page,setPage]=useState(0);
-
-const [size,setSize]=useState(10);
 
 const openHierarchyEdit = (node) => {
   setHierarchyEditUser(node);
@@ -388,7 +383,7 @@ const convertToD3=(nodes)=>{
  if(!nodes?.length) return null;
 
  const build=(node)=>({
-    
+
    name: node.login,
 
    attributes:{
@@ -650,42 +645,29 @@ const searchHierarchyUser = async (searchLogin) => {
   );
 };*/
   // USERS
-  useEffect(()=>{
+  useEffect(() => {
+    setLoading(true);
 
-fetchUsers();
+    axios.get("https://user-extract.onrender.com/api/users-summary")
+      .then(res => {
+        setUsers(res.data);
 
-},[page,size]);
+        const roleSet = new Set();
+        const reportingSet = new Set();
 
-const fetchUsers=async()=>{
+        res.data.forEach(u => {
+          u.roles?.forEach(r => roleSet.add(r));
+          if (u.reportingTo) reportingSet.add(u.reportingTo);
+        });
 
-setLoading(true);
+        const rolesArr = [...roleSet];
+        setRoles(rolesArr);
+        setSelectedRoles(rolesArr);
 
-try{
-
-const res=
-await axios.get(
-`https://user-extract.onrender.com/api/users-summary?page=${page}&size=${size}`
-);
-
-setUsers(
-res.data.content||[]
-);
-
-setTotalUsers(
-res.data.totalElements||0
-);
-
-}catch(err){
-
-console.log(err);
-
-}finally{
-
-setLoading(false);
-
-}
-
-}
+        setReportingList([...reportingSet]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
   useEffect(() => {
   const reopen = localStorage.getItem("reopenHierarchy");
 
@@ -1241,17 +1223,14 @@ return (
         padding: "12px",
         borderRadius: "8px",
         color: "white",
+        textAlign: "center",
         cursor: isDragging ? "grabbing" : "grab",
         opacity: isDragging ? 0.5 : 1,
         minWidth: "180px",
         boxShadow: "0 4px 10px rgba(0,0,0,.25)",
         transition: "background 0.2s ease",
         userSelect: "none",
-        WebkitUserSelect: "none",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        position: "relative"
+        WebkitUserSelect: "none"
       }}
       onClick={async (e) => {
         e.stopPropagation();
@@ -1267,73 +1246,19 @@ return (
         }
       }}
     >
-      {/* Main node info */}
-      <div style={{ textAlign: "center" }}>
-        <div style={{
-          fontWeight: "bold",
-          fontSize: "14px"
-        }}>
-          {nodeDatum.name}
-        </div>
-
-        <div style={{
-          fontSize: "11px",
-          marginTop: "4px"
-        }}>
-          {nodeDatum.attributes?.fullName || ""}
-        </div>
+      <div style={{
+        fontWeight: "bold",
+        fontSize: "14px"
+      }}>
+        {nodeDatum.name}
       </div>
 
-      {/* Edit button */}
-      <button
-        onClick={async (e) => {
-          e.stopPropagation();
-          
-          // Fetch full user details
-          try {
-            const userRes = await axios.get(
-              `https://user-extract.onrender.com/api/user/${nodeDatum.name}`
-            );
-            const user = userRes.data;
-            
-            // Fetch reporting list if not already loaded
-            if (reportingListEdit.length === 0) {
-              const reportRes = await axios.get(
-                "https://user-extract.onrender.com/api/reporting-users"
-              );
-              setReportingListEdit(reportRes.data || []);
-            }
-            
-            openHierarchyEdit(user);
-          } catch (err) {
-            console.error("Error fetching user for edit:", err);
-            alert("Failed to load user details ❌");
-          }
-        }}
-        style={{
-          background: "rgba(255,255,255,0.3)",
-          border: "1px solid rgba(255,255,255,0.5)",
-          color: "white",
-          padding: "4px 8px",
-          borderRadius: "4px",
-          cursor: "pointer",
-          fontSize: "11px",
-          fontWeight: "bold",
-          marginTop: "6px",
-          transition: "all 0.2s ease",
-          alignSelf: "center"
-        }}
-        onMouseEnter={(e) => {
-          e.target.style.background = "rgba(255,255,255,0.5)";
-          e.target.style.transform = "scale(1.05)";
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.background = "rgba(255,255,255,0.3)";
-          e.target.style.transform = "scale(1)";
-        }}
-      >
-        ✎ Edit Reporting
-      </button>
+      <div style={{
+        fontSize: "11px",
+        marginTop: "4px"
+      }}>
+        {nodeDatum.attributes?.fullName || ""}
+      </div>
     </div>
   </foreignObject>
 );
