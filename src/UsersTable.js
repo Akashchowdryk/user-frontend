@@ -9,52 +9,6 @@ import { HTML5Backend } from "react-dnd-html5-backend";
 
 import { FaEye, FaEdit } from "react-icons/fa";
 
-let styles;
-
-const UserRow = React.memo(({ u, isSelected, onToggleSelected, onView, onEdit }) => (
-  <tr
-    style={styles.tr}
-    onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
-    onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
-  >
-    <td style={styles.td}>
-      <input
-        type="checkbox"
-        checked={isSelected}
-        onChange={(e) => onToggleSelected(u.login, e.target.checked)}
-      />
-    </td>
-    <td style={styles.td}>{u.login}</td>
-    <td style={styles.td}>{u.name}</td>
-    <td style={styles.td}>{u.phone}</td>
-    <td style={{ ...styles.td, color: u.activated ? "green" : "red", fontWeight: "bold" }}>
-      {u.activated ? "Active" : "Inactive"}
-    </td>
-    <td style={styles.td}>
-      {u.roles?.map((r, idx) => (
-        <div key={idx}>{r}</div>
-      ))}
-    </td>
-    <td style={styles.td}>{u.version}</td>
-    <td style={styles.td}>{u.reportingTo}</td>
-    <td style={styles.td}>
-      <div style={styles.geoBox}>
-        {u.geofenceNames?.map((g, idx) => (
-          <div key={idx}>{typeof g === "string" ? g : ""}</div>
-        ))}
-      </div>
-    </td>
-    <td style={styles.td}>
-      <button className="icon-btn view" onClick={() => onView(u)} title="View User">
-        <FaEye />
-      </button>
-      <button className="icon-btn edit" onClick={() => onEdit(u)} title="Edit User">
-        <FaEdit />
-      </button>
-    </td>
-  </tr>
-));
-
 // ✅ SAFE HELPER: ensures a block is valid and has a plain string name
 const isValidBlock = (b) =>
   b &&
@@ -1520,6 +1474,50 @@ const reloadAllData = async () => {
   }
 
 };
+
+  const UserRow = React.memo(({ u, isSelected, onToggleSelected, onView, onEdit }) => (
+    <tr
+      style={styles.tr}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
+    >
+      <td style={styles.td}>
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={(e) => onToggleSelected(u.login, e.target.checked)}
+        />
+      </td>
+      <td style={styles.td}>{u.login}</td>
+      <td style={styles.td}>{u.name}</td>
+      <td style={styles.td}>{u.phone}</td>
+      <td style={{ ...styles.td, color: u.activated ? "green" : "red", fontWeight: "bold" }}>
+        {u.activated ? "Active" : "Inactive"}
+      </td>
+      <td style={styles.td}>
+        {u.roles?.map((r, idx) => (
+          <div key={idx}>{r}</div>
+        ))}
+      </td>
+      <td style={styles.td}>{u.version}</td>
+      <td style={styles.td}>{u.reportingTo}</td>
+      <td style={styles.td}>
+        <div style={styles.geoBox}>
+          {u.geofenceNames?.map((g, idx) => (
+            <div key={idx}>{typeof g === "string" ? g : ""}</div>
+          ))}
+        </div>
+      </td>
+      <td style={styles.td}>
+        <button className="icon-btn view" onClick={() => onView(u)} title="View User">
+          <FaEye />
+        </button>
+        <button className="icon-btn edit" onClick={() => onEdit(u)} title="Edit User">
+          <FaEdit />
+        </button>
+      </td>
+    </tr>
+  ));
 
   return (
     <div style={styles.page}>
