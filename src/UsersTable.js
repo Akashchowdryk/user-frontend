@@ -1,3108 +1,1519 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import Tree from "react-d3-tree";
-import { useDrag, useDrop } from "react-dnd";
-import { DndProvider } from "react-dnd";
+import { useDrag, useDrop, DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-
 import { FaEye, FaEdit } from "react-icons/fa";
 
-// ✅ SAFE HELPER: ensures a block is valid and has a plain string name
+// ─── constants ───────────────────────────────────────────────
+const BASE = "https://user-extract.onrender.com/api";
+const PAGE_SIZES = [10, 20, 50, 100];
+
+// ─── helpers ─────────────────────────────────────────────────
 const isValidBlock = (b) =>
-  b &&
-  b.id !== undefined &&
-  b.id !== null &&
-  b.name !== undefined &&
-  b.name !== null &&
-  typeof b.name === "string" &&
-  b.name.trim() !== "";
-
-function UsersTable() {
-
-  const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-
-  const [searchInput, setSearchInput] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedReportingTo, setSelectedReportingTo] = useState("");
-
-  
-  const [downloading, setDownloading] = useState(false);
-
-  const [districts, setDistricts] = useState([]);
-  const [selectedDistrict, setSelectedDistrict] = useState("");
-
-  const [blocks, setBlocks] = useState([]);
-  const [blocksLoading, setBlocksLoading] = useState(false);
-  const [selectedBlocks, setSelectedBlocks] = useState([]);
-  const [blockSearch, setBlockSearch] = useState("");
-  const [roles, setRoles] = useState([]);
-  const [selectedRoles, setSelectedRoles] = useState([]);
-  const [roleSearch, setRoleSearch] = useState("");
-
-  const [editBlockSearch, setEditBlockSearch] = useState("");
-  const [editRoleSearch, setEditRoleSearch] = useState("");
-
-  const [reportingList, setReportingList] = useState([]);
-  const [showReportingDropdown, setShowReportingDropdown] = useState(false);
-  const [reportSearch, setReportSearch] = useState("");
-
-  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
-  const [showBlockDropdown, setShowBlockDropdown] = useState(false);
-
- 
-  
-  const [editUser, setEditUser] = useState(null);
-
-  const [rolesList, setRolesList] = useState([]);
-  const [reportingListEdit, setReportingListEdit] = useState([]);
-  const [loadingRoles, setLoadingRoles] = useState(false);
-  const [loadingReporting, setLoadingReporting] = useState(false);
-
-  const [selectedRolesEdit, setSelectedRolesEdit] = useState([]);
-  const [selectedReportingEdit, setSelectedReportingEdit] = useState(null);
-  const [selectedUsers, setSelectedUsers] = useState([]);
-const [bulkReportingTo, setBulkReportingTo] = useState("");
-const [showBulkPopup, setShowBulkPopup] = useState(false);
-const [updatedUsers, setUpdatedUsers] = useState([]);
-const [showBulkDropdown, setShowBulkDropdown] = useState(false);
-const [bulkReportSearch, setBulkReportSearch] = useState("");
-
-const [showFilters, setShowFilters] = useState(false);
-const [showHierarchy, setShowHierarchy] = useState(false);
-const [hierarchyData, setHierarchyData] = useState([]);
-const [hierarchyLoading, setHierarchyLoading] = useState(false);
-const [expandedNodes, setExpandedNodes] = useState({});
-const [expanded, setExpanded] = useState({});
-const [loadingNodes, setLoadingNodes] = useState({});
-
-const [zoom, setZoom] = useState(1);
-const [position, setPosition] = useState({ x: 0, y: 0 });
-const [isPanning, setIsPanning] = useState(false);
-const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
-const [hierarchyEditUser, setHierarchyEditUser] = useState(null);
-const [hierarchyReporting, setHierarchyReporting] = useState("");
-const [hierarchyReportSearch, setHierarchyReportSearch] = useState("");
-const [showHierarchyDropdown, setShowHierarchyDropdown] = useState(false);
-const [hierarchyKey, setHierarchyKey] = useState(0);
-const [loading, setLoading] = useState(false);
-
-const [hierarchySearch, setHierarchySearch] = useState("");
-const [highlightedUser, setHighlightedUser] = useState("");
-const [searchingHierarchy, setSearchingHierarchy] = useState(false);
-const [hierarchyAbortController, setHierarchyAbortController] = useState(null);
-const [totalUsers,setTotalUsers]=useState(0);
-const loadedUsers = useRef(new Set());
-
-const [page,setPage]=useState(0);
-
-const [size,setSize]=useState(10);
-
-const openHierarchyEdit = (node) => {
-  setHierarchyEditUser(node);
-
-  // 🔥 find matching reporting user from list
-  const current = reportingListEdit.find(
-    r => r.login === node.reportingTo || r.id === node.reportingTo
-  );
-
-  setHierarchyReporting(current?.id || "");
-};
-  // ✅ SAFE HELPER: safely get block name as string
-  const safeBlockName = (b) => {
-    if (!b) return "No name";
-    if (typeof b.name === "string") return b.name;
-    return "No name";
-  };
-const HierarchyNode = ({
-  node,
-  reloadAllData,
-  setLoading,
-  expanded,
-  setExpanded,
-  loadChildren
-}) => {
-
-  // DRAG
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: "USER",
-    item: node,
-    collect: (monitor) => ({
-      isDragging: !!monitor.isDragging()
-    })
-  }));
-
-  // DROP
-  const [, drop] = useDrop(() => ({
-
-    accept: "USER",
-
-    drop: async (draggedUser) => {
-
-      if (draggedUser.login === node.login) return;
-
-      try {
-
-        setLoading(true);
-
-        const userRes = await axios.get(
-          `https://user-extract.onrender.com/api/user/${draggedUser.login}`
-        );
-
-        const user = userRes.data;
-
-        const payload = {
-          id: user.id,
-          login: user.login,
-          firstName: user.firstName || "",
-          lastName: user.lastName || "",
-          email: user.email || "",
-          phone: user.phone || "",
-          gpsimei: user.gpsimei || "",
-          activated: user.activated ?? true,
-          authorities: user.authorities || [],
-          geofences: user.geofences?.map(g => g.id || g) || [],
-          reportingTo: node.id,
-          langKey: user.langKey || "en"
-        };
-
-        await axios.put(
-          "https://user-extract.onrender.com/api/edit-user",
-          payload
-        );
-
-        alert("Hierarchy Updated ✅");
-
-        await reloadAllData();
-
-      } catch (err) {
-
-        console.error(err);
-        alert("Update failed ❌");
-
-      } finally {
-
-        setLoading(false);
-      }
-    }
-  }));
-
-  return (
-
-    <div
-      ref={drop}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center"
-      }}
-    >
-
-      {/* USER NODE */}
-      <div
-        ref={drag}
-        style={{
-          padding: "10px 14px",
-          borderRadius: "10px",
-          background:
-  highlightedUser === node.login
-    ? "#f59e0b"
-    : node.hasChildren
-      ? "#16a34a"
-      : "#2563eb",
-          color: "white",
-          cursor: "grab",
-          opacity: isDragging ? 0.5 : 1,
-          boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
-          minWidth: "120px",
-          textAlign: "center"
-        }}
-      >
-        {node.login}
-      </div>
-
-      {/* EXPAND BUTTON */}
-      {node.hasChildren && (
-
-  <div
-
-    onMouseDown={async (e) => {
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      console.log("EXPAND CLICKED:", node.login);
-
-      // collapse
-      if (expanded[node.login]) {
-
-        setExpanded(prev => ({
-          ...prev,
-          [node.login]: false
-        }));
-
-        return;
-      }
-
-      // load children
-      await loadChildren(node.login);
-      await new Promise(resolve =>
-  setTimeout(resolve, 300)
-);
-      // expand
-      setExpanded(prev => ({
-        ...prev,
-        [node.login]: true
-      }));
-
-    }}
-
-    style={{
-      marginTop: "8px",
-      width: "24px",
-      height: "24px",
-      borderRadius: "50%",
-      background: "#2563eb",
-      color: "white",
-      cursor: "pointer",
-      fontWeight: "bold",
-      fontSize: "14px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      userSelect: "none"
-    }}
-  >
-    {expanded[node.login] ? "−" : "+"}
-  </div>
-
-)}
-
-    </div>
-  );
-};
-const updateHierarchyReporting = async () => {
-  if (!hierarchyEditUser) return;
-
-  try {
-    // 🔹 your existing update logic
-    const userRes = await axios.get(
-      `https://user-extract.onrender.com/api/user/${hierarchyEditUser.login}`
-    );
-
-    const user = userRes.data;
-    
-
-    const payload = {
-      id: user.id,
-      login: user.login,
-      firstName: user.firstName || "",
-      lastName: user.lastName || "",
-      email: user.email || "",
-      phone: user.phone || "",
-      gpsimei: user.gpsimei || "",
-      activated: user.activated ?? true,
-      authorities: user.authorities || [],
-      geofences: user.geofences?.map(g => g.id || g) || [],
-      reportingTo: Number(hierarchyReporting),
-      langKey: user.langKey || "en"
-    };
-
-    await axios.put(
-      "https://user-extract.onrender.com/api/edit-user",
-      payload
-    );
-    // 🔥 refresh all app data
-await reloadAllData();
-
-// close modal
-setHierarchyEditUser(null);
-
-alert("Updated Successfully ✅");
-
-   
-
-  } catch (err) {
-    console.error(err);
-    alert("Update failed ❌");
-  }
-};
-
-// ✅ Enrich hierarchy nodes with user details (firstName, lastName)
-const enrichHierarchyWithUserDetails = async (nodes) => {
-
-  const enriched=[];
-
-  for(const node of nodes){
-
-    try{
-
-      const userRes=
-      await axios.get(
-      `https://user-extract.onrender.com/api/user/${node.login}`
-      );
-
-      const userDetails=
-      userRes.data;
-
-      enriched.push({
-
-        ...node,
-
-        firstName:
-        userDetails.firstName || "",
-
-        lastName:
-        userDetails.lastName || "",
-
-        // avoid recursion explosion
-        children:
-        node.children || []
-
-      });
-
-    }catch(err){
-
-      console.error(err);
-
-      enriched.push({
-
-        ...node,
-
-        firstName:"",
-
-        lastName:"",
-
-        children:
-        node.children || []
-
-      });
-
-    }
-
-  }
-
-  return enriched;
-
-};
-const findNodeByLogin=(nodes,login)=>{
-
-   for(const node of nodes){
-
-      if(node.login===login)
-         return node;
-
-      if(node.children?.length){
-
-         const found=
-           findNodeByLogin(
-              node.children,
-              login
-           );
-
-         if(found)
-            return found;
-      }
-   }
-
-   return null;
-}
-const convertToD3=(nodes)=>{
-
- if(!nodes?.length)
- return null;
-
- const build=(node)=>({
-
-   id:node.id,
-
-   login:node.login,
-
-   name:node.login,
-
-   attributes:{
-      fullName:
-      `${node.firstName || ""}
-      ${node.lastName || ""}`
-   },
-
-   hasChildren:
-   node.hasChildren,
-
-   children:
-   node.children?.length
-   ?node.children.map(build)
-   :[]
-
- });
-
- return build(nodes[0]);
-
-};
-
-const loadChildren = useCallback(async (login) => {
-  if (loadedUsers.current.has(login)) {
-    return;
-  }
-
-  loadedUsers.current.add(login);
-
-  try {
-    setLoadingNodes(prev => ({
-      ...prev,
-      [login]: true
-    }));
-
-    const res = await axios.get(
-      `https://user-extract.onrender.com/api/hierarchy/children/${login}`,
-      { signal: hierarchyAbortController?.signal }
-    );
-    
-    // ✅ Enrich children with user details
-    let children = Array.isArray(res.data)
-      ? res.data.map(c => ({
-          ...c,
-          children: c.children || []
-        }))
-      : [];
-    
-    children = await enrichHierarchyWithUserDetails(children);
-    
-    const updateTree = (nodes) => {
-      return nodes.map(n => {
-        if (n.login === login) {
-          return {
-            ...n,
-            children
-          };
-        }
-
-        if (n.children) {
-          return {
-            ...n,
-            children: updateTree(n.children)
-          };
-        }
-
-        return n;
-      });
-    };
-
-    setHierarchyData(prev => [...updateTree(prev)]);
-    await new Promise(resolve => setTimeout(resolve, 200));
-    setHierarchyKey(prev => prev + 1);
-
-  } catch (err) {
-    if (err.name !== 'AbortError') {
-      console.error(err);
-    }
-  } finally {
-    setLoadingNodes(prev => ({
-      ...prev,
-      [login]: false
-    }));
-  }
-}, [hierarchyAbortController]);
-const searchHierarchyUser = async (searchLogin) => {
-
-  if (!searchLogin) return;
-
-  // Check if we have an abort controller
-  if (!hierarchyAbortController) return;
-
-  setSearchingHierarchy(true);
-
-  let foundPath = [];
-  let foundUser = null;
-  const pathNodes = {}; // Store all nodes on the found path
-
-  // recursive API traversal to find the path
-  const traverse = async (login, path = [], node = null) => {
-
-    // current path
-    const currentPath = [...path, login];
-
-    // Store this node for later reconstruction
-    pathNodes[login] = node;
-
-    // Check if current node matches search (by login, firstName, lastName, or full name)
-    const fullName = node ? `${node.firstName || ""} ${node.lastName || ""}`.trim() : "";
-    const matchesSearch = 
-      login.toLowerCase() === searchLogin.toLowerCase() ||
-      (node?.firstName && node.firstName.toLowerCase().includes(searchLogin.toLowerCase())) ||
-      (node?.lastName && node.lastName.toLowerCase().includes(searchLogin.toLowerCase())) ||
-      (fullName && fullName.toLowerCase().includes(searchLogin.toLowerCase()));
-
-    if (matchesSearch) {
-      foundPath = currentPath;
-      foundUser = node || { login, firstName: "", lastName: "" };
-      return true;
-    }
-
-    try {
-
-      // fetch children directly with abort signal
-      const res = await axios.get(
-        `https://user-extract.onrender.com/api/hierarchy/children/${login}`,
-        { signal: hierarchyAbortController.signal }
-      );
-
-      
-
-      let children =
-Array.isArray(res.data)
-?res.data.map(c=>({
-...c,
-children:[]
-}))
-:[];
-
-      // search children
-      for (const child of children) {
-
-        const found = await traverse(
-          child.login,
-          currentPath,
-          child
-        );
-
-        if (found) return true;
-      }
-
-    } catch (err) {
-
-      // Don't log if it was aborted
-      if (err.name !== 'AbortError') {
-        console.error(err);
-      }
-    }
-
-    return false;
-  };
-
-  // start from roots
-  for (const root of hierarchyData) {
-
-    const found = await traverse(root.login, [], root);
-
-    if (found) break;
-  }
-
-  // If user not found, show error
-  if (foundPath.length === 0) {
-    setSearchingHierarchy(false);
-    alert(`User "${searchLogin}" not found in hierarchy ❌`);
-    setHighlightedUser("");
-    return;
-  }
-
-  // Highlight the found user with their name
-  setHighlightedUser(foundUser?.login || searchLogin);
-
-  // ✅ Build filtered hierarchy from the collected path nodes
-  const buildPathHierarchy = (path, nodesMap) => {
-    if (!path || path.length === 0) return [];
-
-    // Start with root
-    const root = nodesMap[path[0]];
-    if (!root) return [];
-
-    const buildNode = (login, depth) => {
-      const node = nodesMap[login];
-      if (!node) return null;
-
-      // Find next login in path
-      const currentIndex = path.indexOf(login);
-      const nextLogin = path[currentIndex + 1];
-
-      return {
-        ...node,
-        children: nextLogin ? [buildNode(nextLogin, depth + 1)] : []
-      };
-    };
-
-    return [buildNode(path[0], 0)].filter(Boolean);
-  };
-
-  const filteredHierarchy = buildPathHierarchy(foundPath, pathNodes);
-
-  // Set expanded for all nodes in the path
-  const expandedMap = {};
-  foundPath.forEach(login => {
-    expandedMap[login] = true;
-  });
-
-  setHierarchyData(filteredHierarchy);
-  setExpanded(expandedMap);
-
-  // force rerender
-  setHierarchyKey(prev => prev + 1);
-  setSearchingHierarchy(false);
-  
-  // Show success message with user details
-  const displayName = foundUser?.firstName || foundUser?.lastName 
-    ? `${foundUser.firstName} ${foundUser.lastName}`.trim() 
-    : foundUser?.login;
-  alert(`Found: ${displayName} ✅`);
-};
-/*const renderOrgTree = (node) => {
-
-  const isExpanded = expanded[node.login];
-
-  return (
-
-    <TreeNode
-  key={`${node.login}-${node.children?.length || 0}`}
-  label={
-    <div style={{ textAlign: "center" }}>
-      <HierarchyNode
-        node={node}
-        reloadAllData={reloadAllData}
-        setLoading={setLoading}
-        expanded={expanded}
-        setExpanded={setExpanded}
-        loadChildren={loadChildren}
-      />
-    </div>
-  }
->
-{expanded[node.login] === true &&
-  Array.isArray(node.children) &&
-  node.children.length > 0 &&
-  node.children.map(child => renderOrgTree(child))
+  b && b.id !== undefined && b.name !== undefined &&
+  typeof b.name === "string" && b.name.trim() !== "";
+
+const api = axios.create({ baseURL: BASE });
+
+// ─── debounce hook ────────────────────────────────────────────
+function useDebounce(value, ms = 500) {
+  const [deb, setDeb] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDeb(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return deb;
 }
 
-</TreeNode>
-  );
-};*/
-  // USERS
- // USERS
-useEffect(() => {
-  fetchUsers();
-}, [page, size]);
-
-const fetchUsers = async () => {
-
-  try {
-
-    setLoading(true);
-
-    const cb = Date.now();
-
-    const res = await axios.get(
-      `https://user-extract.onrender.com/api/users-summary?cacheBuster=${cb}&page=${page}&size=${size}&sort=last_modified_date,desc`
-    );
-
-    console.log("PAGINATED:", res.data);
-
-    // Normalize response: API sometimes returns paginated shape or a plain array
-    const content = Array.isArray(res.data)
-      ? res.data
-      : Array.isArray(res.data?.content)
-      ? res.data.content
-      : [];
-
-    const total = Number(res.data?.totalElements) || (Array.isArray(res.data) ? content.length : 0);
-
-    setTotalUsers(total);
-
-    // Calculate last available page (0-based)
-    const lastPage = Math.max(0, Math.ceil(total / size) - 1);
-
-    // If we requested a page beyond the last available, step back to lastPage
-    if (content.length === 0 && page > 0 && page > lastPage) {
-      console.warn(`Requested page ${page} beyond last page ${lastPage}, resetting page.`);
-      setPage(lastPage);
-      return; // caller effect will re-trigger fetch with corrected page
-    }
-
-    setUsers(content);
-
-    // roles
-    const roleSet = new Set();
-
-    const reportingSet = new Set();
-
-    (res.data.content || []).forEach(u => {
-
-      u.roles?.forEach(
-        r => roleSet.add(r)
-      );
-
-      if (u.reportingTo)
-        reportingSet.add(
-          u.reportingTo
-        );
-
-    });
-
-    setRoles([
-      ...roleSet
-    ]);
-
-    setReportingList([
-      ...reportingSet
-    ]);
-
-  } catch (err) {
-
-    console.error("Error fetching users:", err);
-
-    // If API unavailable, ensure UI doesn't continue to show stale pagination
-    if (page > 0) setPage(0);
-
-    setUsers([]);
-    setTotalUsers(0);
-
-  } finally {
-
-    setLoading(false);
-
-  }
-
-};
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchInput);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [searchInput]);
-
-  // DISTRICTS
-  useEffect(() => {
-    axios.get("https://user-extract.onrender.com/api/districts")
-      .then(res => setDistricts(res.data));
-  }, []);
-
-  // BLOCKS
-  useEffect(() => {
-
-    if (!selectedDistrict) {
-      setBlocks([]);
-      setSelectedBlocks([]);
-      return;
-    }
-
-    setBlocksLoading(true);
-
-    axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
-      .then(res => {
-        const validBlocks = Array.isArray(res.data)
-          ? res.data.filter(isValidBlock)
-          : [];
-        setBlocks(validBlocks);
-        setSelectedBlocks(validBlocks.map(b => b.id));
-      })
-      .catch(err => {
-        console.error("Error loading blocks:", err);
-        setBlocks([]);
-        setSelectedBlocks([]);
-      })
-      .finally(() => setBlocksLoading(false));
-
-  }, [selectedDistrict]);
-  useEffect(() => {
-  axios.get("https://user-extract.onrender.com/api/reporting-users")
-    .then(res => setReportingListEdit(res.data || []))
-    .catch(() => setReportingListEdit([]));
-}, []);
-
-  // RESET PAGE
-  useEffect(() => {
-    setPage(0);
-  }, [debouncedSearch, selectedReportingTo, selectedDistrict, selectedRoles, selectedBlocks]);
-
-  // FILTER
-  const filteredUsers = useMemo(() => {
-    if (!users || users.length === 0) return [];
-
-    return users.filter(user => {
-      const searchText = debouncedSearch.toLowerCase();
-
-      const matchSearch =
-        user.login?.toLowerCase().includes(searchText) ||
-        (user.name && user.name.toLowerCase().includes(searchText)) ||
-        (user.phone && user.phone.toString().toLowerCase().includes(searchText));
-
-      const matchReporting =
-        !selectedReportingTo || user.reportingTo === selectedReportingTo;
-
-      const matchRoles =
-        selectedRoles.length === 0 ||
-        selectedRoles.some(r => user.roles?.includes(r));
-
-      const matchBlocks =
-        !selectedDistrict ||
-        (Array.isArray(selectedBlocks) && selectedBlocks.length > 0 &&
-          selectedBlocks.some(id => {
-            const block = Array.isArray(blocks) && blocks.find(b => b.id === id);
-            return block && typeof block.name === "string" && user.geofenceNames?.includes(block.name);
-          }));
-
-      const matchDistrict =
-        !selectedDistrict ||
-        (Array.isArray(blocks) && blocks.some(b =>
-          typeof b.name === "string" && user.geofenceNames?.includes(b.name)
-        ));
-
-      return matchSearch && matchReporting && matchRoles && matchBlocks && matchDistrict;
-    });
-  }, [users, debouncedSearch, selectedReportingTo, selectedDistrict, selectedRoles, selectedBlocks, blocks]);
-
-  const totalPages = useMemo(() => Math.ceil(totalUsers / size), [totalUsers, size]);
-  const currentUsers = useMemo(() => filteredUsers, [filteredUsers]);
-
-  const toggleUserSelection = useCallback((login, checked) => {
-    setSelectedUsers(prev =>
-      checked
-        ? prev.includes(login)
-          ? prev
-          : [...prev, login]
-        : prev.filter(l => l !== login)
-    );
-  }, []);
-
-  const cleanStyles = {
-  modalOverlay: {
-    position: "fixed",
-    top: 0, left: 0, right: 0, bottom: 0,
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 9999
-  },
-
-  modalBox: {
-    width: "420px",
-    background: "white",
-    borderRadius: "12px",
-    padding: "20px",
-    boxShadow: "0 8px 25px rgba(0,0,0,0.2)"
-  },
-
-  header: {
-    marginBottom: "10px"
-  },
-
-  userText: {
-    marginBottom: "15px",
-    fontSize: "14px"
-  },
-
-  dropdownContainer: {
-    position: "relative"
-  },
-
-  selectBox: {
-    border: "1px solid #ccc",
-    padding: "10px",
-    borderRadius: "6px",
-    cursor: "pointer",
-    background: "#f9fafb"
-  },
-
-  dropdown: {
-    position: "absolute",
-    width: "100%",
-    background: "white",
-    border: "1px solid #ddd",
-    borderRadius: "6px",
-    marginTop: "5px",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-    zIndex: 1000
-  },
-
-  searchInput: {
-    width: "100%",
-    padding: "8px",
-    border: "none",
-    borderBottom: "1px solid #eee",
-    outline: "none"
-  },
-
-  list: {
-    maxHeight: "180px",
-    overflowY: "auto"
-  },
-
-  listItem: {
-    padding: "10px",
-    cursor: "pointer",
-    borderBottom: "1px solid #f1f1f1"
-  },
-
-  actions: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: "10px",
-    marginTop: "20px"
-  },
-
-  saveBtn: {
-    background: "#2563eb",
-    color: "white",
-    border: "none",
-    padding: "8px 14px",
-    borderRadius: "6px",
-    cursor: "pointer"
-  },
-
-  cancelBtn: {
-    background: "#e5e7eb",
-    border: "none",
-    padding: "8px 14px",
-    borderRadius: "6px",
-    cursor: "pointer"
-  }
-};
-
- const handleBulkUpdate = async () => {
-
-  if (selectedUsers.length === 0) {
-    alert("Select users ❌");
-    return;
-  }
-
-  if (!bulkReportingTo) {
-    alert("Select reporting user ❌");
-    return;
-  }
-
-  try {
-    await axios.put(
-      "https://user-extract.onrender.com/api/bulk-update-reporting",
-      {
-        logins: selectedUsers,
-        reportingTo: Number(bulkReportingTo)
-      }
-    );
-
-    setUpdatedUsers(selectedUsers);
-    setShowBulkPopup(true);
-
-    // 🔥 RESET UI STATE
-    setSelectedUsers([]);
-    setBulkReportingTo("");
-
-    // 🔥 MOST IMPORTANT FIX
-    await reloadAllData();   // ✅ NOT reloadHierarchy()
-
-  } catch (err) {
-    console.error(err);
-    alert("Bulk update failed ❌");
-  }
-};
-
-  const openEditModal = useCallback((user) => {
-    setLoadingRoles(true);
-    setLoadingReporting(true);
-
-    axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
-      .then(res => {
-        const fullUser = res.data;
-
-        const cleanUser = {
-          id: fullUser.id,
-          login: fullUser.login,
-          firstName: fullUser.firstName || "",
-          lastName: fullUser.lastName || "",
-          email: fullUser.email || "",
-          phone: fullUser.phone || "",
-          gpsimei: fullUser.gpsimei || "",
-          activated: fullUser.activated ?? true,
-          authorities: fullUser.authorities || [],
-          ownedBy: fullUser.ownedBy || [],
-          geofences: fullUser.geofences || [],
-          langKey: fullUser.langKey || "en"
-        };
-
-        setEditUser(cleanUser);
-        setSelectedRolesEdit(cleanUser.authorities || []);
-        setEditBlockSearch("");
-        setEditRoleSearch("");
-
-        const geoIds = Array.isArray(cleanUser.geofences)
-          ? cleanUser.geofences.map(g =>
-              typeof g === "object" ? g.id : g
-            )
-          : [];
-        setSelectedBlocks(geoIds);
-
-        axios.get("https://user-extract.onrender.com/api/geofences")
-          .then(res => {
-            const masters = Array.isArray(res.data?.masters) ? res.data.masters : [];
-            const minis = Array.isArray(res.data?.minis) ? res.data.minis : [];
-            const allBlocks = [...masters, ...minis];
-            const validBlocks = allBlocks.filter(isValidBlock);
-            setBlocks(validBlocks);
-            console.log("BLOCKS LOADED:", validBlocks.length);
-          })
-          .catch(err => {
-            console.error("Error loading blocks:", err);
-            setBlocks([]);
-          });
-
-        axios.get("https://user-extract.onrender.com/api/roles")
-          .then(res => {
-            console.log("ROLES API RESPONSE:", res.data);
-            setRolesList(Array.isArray(res.data) ? res.data : []);
-          })
-          .catch(err => {
-            console.error("Error loading roles:", err);
-            setRolesList([]);
-          })
-          .finally(() => setLoadingRoles(false));
-
-        axios.get("https://user-extract.onrender.com/api/reporting-users")
-          .then(res => {
-            const list = Array.isArray(res.data) ? res.data : [];
-            setReportingListEdit(list);
-            const reportingId = cleanUser.ownedBy?.[0]?.id;
-            const selected = list.find(x => x.id === reportingId);
-            setSelectedReportingEdit(selected || null);
-          })
-          .finally(() => setLoadingReporting(false));
-      })
-      .catch(err => {
-        console.error("Error loading user:", err);
-        alert("Failed to load user details ❌");
-        setLoadingRoles(false);
-        setLoadingReporting(false);
-      });
-  }, []);
-
-  const handleUpdate = async () => {
-
-  if (!editUser) {
-    alert("No user selected ❌");
-    return;
-  }
-
-
-
-  const payload = {
-    id: editUser.id,
-    login: editUser.login,
-    firstName: editUser.firstName || "",
-    lastName: editUser.lastName || "",
-    email: editUser.email || "",
-    phone: editUser.phone || "",
-    gpsimei: editUser.gpsimei || "",
-    activated: editUser.activated ?? true,
-    authorities: Array.isArray(selectedRolesEdit)
-      ? selectedRolesEdit
-          .map(r => typeof r === "string" ? r : r?.configValue || r?.name || "")
-          .filter(Boolean)
-      : [],
-    geofences: selectedBlocks,
-    reportingTo: selectedReportingEdit?.id || null,
-    langKey: editUser.langKey || "en"
-  };
-
-  console.log("FINAL PAYLOAD:", payload);
-
-  try {
-
-    // ✅ SINGLE API CALL ONLY
-    await axios.put(
-      "https://user-extract.onrender.com/api/edit-user",
-      payload
-    );
-
-    // ✅ CLOSE MODAL
-    setEditUser(null);
-
-    // ✅ RESET BLOCKS (OPTIONAL - KEEP IF YOU NEED FILTER RESET)
-    setBlocks([]);
-    setSelectedBlocks([]);
-
-    // 🔥 MOST IMPORTANT FIX
-    await reloadAllData();
-
-    alert("User Updated Successfully ✅");
-
-  } catch (err) {
-    console.error("ERROR RESPONSE:", err.response?.data);
-    console.error("ERROR STATUS:", err.response?.status);
-    console.error("ERROR MESSAGE:", err.message);
-
-    alert("Update Failed ❌");
-  }
-};
-
-  const handleUserClick = useCallback((user) => {
-    axios.get(`https://user-extract.onrender.com/api/user/${user.login}`)
-      .then(res => setSelectedUser(res.data));
-  }, []);
-
-  const downloadAll = useCallback(() => {
-    setDownloading(true);
-
-    const dataToExport = filteredUsers.map(u => ({
-      Login: u.login,
-      Name: u.name,
-      Phone: u.phone,
-      Status: u.activated ? "Active" : "Inactive",
-      Roles: u.roles?.join(", "),
-      Version: u.version,
-      Reporting: u.reportingTo,
-      Geofences: u.geofenceNames?.join(", ")
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Users");
-
-    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([buffer]), "Filtered_Users.xlsx");
-
-    setDownloading(false);
-  }, [filteredUsers]);
- 
-const handleWheel = (e) => {
-
-  const delta = e.deltaY > 0 ? -0.1 : 0.1;
-
-  setZoom(prev => {
-
-    let newZoom = prev + delta;
-
-    if (newZoom < 0.3) newZoom = 0.3;
-    if (newZoom > 3) newZoom = 3;
-
-    return newZoom;
-  });
-};
-const handleMouseDown = (e) => {
-
-  setIsPanning(true);
-
-  setStartPoint({
-    x: e.clientX - position.x,
-    y: e.clientY - position.y
-  });
-};
-
-const handleMouseMove = (e) => {
-
-  if (!isPanning) return;
-
-  setPosition({
-    x: e.clientX - startPoint.x,
-    y: e.clientY - startPoint.y
-  });
-};
-
-const handleMouseUp = () => {
-  setIsPanning(false);
-};
-const HierarchyD3Node = ({
-  nodeDatum,
-  toggleNode,
-  hierarchyData,
-  loadChildren,
-  setHierarchyKey,
-  reloadAllData,
-  setLoading
-}) => {
-
-const [{ isDragging }, drag] = useDrag(() => ({
-  type: "USER",
-  item: {
-    login: nodeDatum.name,
-    id: nodeDatum.id
-  },
-  collect: (monitor) => ({
-    isDragging: !!monitor.isDragging()
-  })
-}));
-
-const [{ isOver }, drop] = useDrop(() => ({
-  accept: "USER",
-  collect: (monitor) => ({
-    isOver: !!monitor.isOver()
-  }),
-  drop: async (draggedItem) => {
-    try {
-      if (draggedItem.login === nodeDatum.name) return;
-
-      console.log("DROP:", draggedItem.login, "=>", nodeDatum.name);
-      setLoading(true);
-
-      const userRes = await axios.get(
-        `https://user-extract.onrender.com/api/user/${draggedItem.login}`
-      );
-
-      const user = userRes.data;
-      const target = findNodeByLogin(hierarchyData, nodeDatum.name);
-
-      if (!target) {
-        alert("Target not found");
-        return;
-      }
-
-      const payload = {
-        id: user.id,
-        login: user.login,
-        firstName: user.firstName || "",
-        lastName: user.lastName || "",
-        email: user.email || "",
-        phone: user.phone || "",
-        gpsimei: user.gpsimei || "",
-        activated: user.activated ?? true,
-        authorities: user.authorities || [],
-        geofences: user.geofences?.map(g => g.id || g) || [],
-        reportingTo: target.id,
-        langKey: user.langKey || "en"
-      };
-
-      console.log("PAYLOAD:", payload);
-
-      await axios.put(
-        "https://user-extract.onrender.com/api/edit-user",
-        payload
-      );
-
-      alert("Hierarchy updated ✅");
-      await reloadAllData();
-      setHierarchyKey(p => p + 1);
-
-    } catch (err) {
-      console.error("DROP ERROR:", err);
-      alert("Update failed ❌");
-    } finally {
-      setLoading(false);
-    }
-  }
-}));
-
-const hasChildren = nodeDatum.hasChildren || nodeDatum._children?.length;
-
-return (
-  <foreignObject
-    width="220"
-    height="100"
-    x="-110"
-    y="-40"
-    style={{
-      pointerEvents: "auto"
-    }}
-  >
-    <div
-      ref={(node) => {
-        drag(drop(node));
-      }}
-      onDragStart={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-      style={{
-        background:
-          highlightedUser === nodeDatum.name
-            ? "#f59e0b"
-            : isOver
-            ? "#fbbf24"
-            : hasChildren
-            ? "#16a34a"
-            : "#2563eb",
-        padding: "12px",
-        borderRadius: "8px",
-        color: "white",
-        cursor: isDragging ? "grabbing" : "grab",
-        opacity: isDragging ? 0.5 : 1,
-        minWidth: "180px",
-        boxShadow: "0 4px 10px rgba(0,0,0,.25)",
-        transition: "background 0.2s ease",
-        userSelect: "none",
-        WebkitUserSelect: "none",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        position: "relative"
-      }}
-      onClick={async (e) => {
-        e.stopPropagation();
-        
-        // Load children if they exist but haven't been fetched yet
-        if (nodeDatum.hasChildren && (!nodeDatum.children || nodeDatum.children.length === 0)) {
-          await loadChildren(nodeDatum.name);
-        }
-        
-        // Toggle the node expansion
-        if (toggleNode) {
-          toggleNode();
-        }
-      }}
-    >
-      {/* Main node info */}
-      <div style={{ textAlign: "center" }}>
-        <div style={{
-          fontWeight: "bold",
-          fontSize: "14px"
-        }}>
-          {nodeDatum.name}
-        </div>
-
-        <div style={{
-          fontSize: "11px",
-          marginTop: "4px"
-        }}>
-          {nodeDatum.attributes?.fullName || ""}
-        </div>
-      </div>
-
-      {/* Edit button */}
-      <button
-        onClick={async (e) => {
-          e.stopPropagation();
-          
-          // Fetch full user details
-          try {
-            const userRes = await axios.get(
-              `https://user-extract.onrender.com/api/user/${nodeDatum.name}`
-            );
-            const user = userRes.data;
-            
-            // Fetch reporting list if not already loaded
-            if (reportingListEdit.length === 0) {
-              const reportRes = await axios.get(
-                "https://user-extract.onrender.com/api/reporting-users"
-              );
-              setReportingListEdit(reportRes.data || []);
-            }
-            
-            openHierarchyEdit(user);
-          } catch (err) {
-            console.error("Error fetching user for edit:", err);
-            alert("Failed to load user details ❌");
-          }
-        }}
-        style={{
-          background: "rgba(255,255,255,0.3)",
-          border: "1px solid rgba(255,255,255,0.5)",
-          color: "white",
-          padding: "4px 8px",
-          borderRadius: "4px",
-          cursor: "pointer",
-          fontSize: "11px",
-          fontWeight: "bold",
-          marginTop: "6px",
-          transition: "all 0.2s ease",
-          alignSelf: "center"
-        }}
-        onMouseEnter={(e) => {
-          e.target.style.background = "rgba(255,255,255,0.5)";
-          e.target.style.transform = "scale(1.05)";
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.background = "rgba(255,255,255,0.3)";
-          e.target.style.transform = "scale(1)";
-        }}
-      >
-        ✎ Edit Reporting
-      </button>
-    </div>
-  </foreignObject>
+// ─── Spinner ──────────────────────────────────────────────────
+const Spinner = ({ size = 24, inline = false }) => (
+  <span style={{
+    display: inline ? "inline-block" : "block",
+    width: size, height: size,
+    border: `3px solid #e5e7eb`,
+    borderTop: `3px solid #2563eb`,
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+    flexShrink: 0,
+  }} />
 );
 
-};
-const reloadAllData = async () => {
+// ─── Build API params from current filter state ───────────────
+// This is the single source of truth for all filter params.
+// Used by: fetch users, export, hierarchy search.
+function buildParams(filters, page = 0, size = 10) {
+  const p = new URLSearchParams();
 
-  setLoading(true);
+  p.append("page", page);
+  p.append("size", size);
+  p.append("sort", "last_modified_date,desc");
 
-  try {
-
-    const cb=Date.now();
-
-    const [usersRes,hierarchyRes]=
-    await Promise.all([
-
-      axios.get(
-      `https://user-extract.onrender.com/api/users-summary?page=${page}&size=${size}&cb=${cb}`
-      ),
-
-      axios.get(
-      `https://user-extract.onrender.com/api/hierarchy/root?cb=${cb}`
-      )
-
-    ]);
-
-    const usersContent = Array.isArray(usersRes.data)
-      ? usersRes.data
-      : Array.isArray(usersRes.data?.content)
-      ? usersRes.data.content
-      : [];
-
-    const usersTotal = Number(usersRes.data?.totalElements) || (Array.isArray(usersRes.data) ? usersContent.length : 0);
-
-    setTotalUsers(usersTotal);
-
-    const lastPage = Math.max(0, Math.ceil(usersTotal / size) - 1);
-    if (usersContent.length === 0 && page > 0 && page > lastPage) {
-      setPage(lastPage);
-      // allow effect to refetch with corrected page
-      return;
-    }
-
-    setUsers(usersContent);
-
-    setHierarchyData(
-
-      Array.isArray(
-      hierarchyRes.data
-      )
-
-      ? hierarchyRes.data
-
-      : [hierarchyRes.data]
-
-    );
-
-  } catch(err){
-
-    console.error(err);
-
-  } finally{
-
-    setLoading(false);
-
+  if (filters?.search?.trim()) {
+    p.append("search", filters.search.trim());
   }
 
-};
+  if (filters?.reportingTo) {
+    p.append("reportingTo", filters.reportingTo);
+  }
 
-  const UserRow = React.memo(({ u, isSelected, onToggleSelected, onView, onEdit }) => (
-    <tr
-      style={styles.tr}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
-    >
-      <td style={styles.td}>
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={(e) => onToggleSelected(u.login, e.target.checked)}
-        />
-      </td>
-      <td style={styles.td}>{u.login}</td>
-      <td style={styles.td}>{u.name}</td>
-      <td style={styles.td}>{u.phone}</td>
-      <td style={{ ...styles.td, color: u.activated ? "green" : "red", fontWeight: "bold" }}>
-        {u.activated ? "Active" : "Inactive"}
-      </td>
-      <td style={styles.td}>
-        {u.roles?.map((r, idx) => (
-          <div key={idx}>{r}</div>
+  if (filters?.roles?.length) {
+    filters.roles.forEach(role=>{
+      p.append("roles",role)
+    });
+  }
+
+  if (filters?.blocks?.length) {
+    filters.blocks.forEach(block=>{
+      p.append("blocks",block)
+    });
+  }
+
+ if(
+   filters?.status !== "" &&
+   filters?.status !== undefined &&
+   filters?.status !== null
+){
+   p.append(
+      "activated",
+      filters.status
+   );
+}
+
+  return p.toString();
+}
+
+// ─── UserRow ──────────────────────────────────────────────────
+const UserRow = React.memo(({ u, isSelected, onToggleSelected, onView, onEdit }) => (
+  <tr style={{ background: isSelected ? "#eff6ff" : "white" }}>
+    <td style={S.td}>
+      <input type="checkbox" checked={isSelected}
+        onChange={(e) => onToggleSelected(u.login, e.target.checked)} />
+    </td>
+    <td style={S.td}>{u.login}</td>
+    <td style={S.td}>{u.name}</td>
+    <td style={S.td}>{u.phone}</td>
+    <td style={{ ...S.td, color: u.activated ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+      {u.activated ? "Active" : "Inactive"}
+    </td>
+    <td style={S.td}>{u.roles?.join(", ")}</td>
+    <td style={S.td}>{u.version}</td>
+    <td style={S.td}>{u.reportingTo}</td>
+    <td style={S.td}>
+      <div style={{ maxHeight: 55, overflowY: "auto" }}>
+        {u.geofenceNames?.map((g, i) => typeof g === "string" ? <div key={i}>{g}</div> : null)}
+      </div>
+    </td>
+    <td style={S.td}>
+      <button onClick={() => onView(u)} title="View" style={S.viewBtn}><FaEye /></button>
+      <button onClick={() => onEdit(u)} title="Edit" style={S.editBtn}><FaEdit /></button>
+    </td>
+  </tr>
+));
+
+// ─── Pagination ───────────────────────────────────────────────
+const Pagination = React.memo(({ page, size, total, onPage, onSize }) => {
+  const totalPages = Math.max(1, Math.ceil(total / size));
+  const from = total === 0 ? 0 : page * size + 1;
+  const to = Math.min((page + 1) * size, total);
+
+  const nums = useMemo(() => {
+    const s = Math.max(0, Math.min(page - 2, totalPages - 5));
+    const e = Math.min(totalPages, s + 5);
+    return Array.from({ length: e - s }, (_, i) => s + i);
+  }, [page, totalPages]);
+
+  return (
+    <div style={S.paginationBar}>
+      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+        <span style={{ color: "#6b7280", fontSize: 13 }}>
+          Showing <strong>{from}</strong>–<strong>{to}</strong> of <strong>{total}</strong>
+        </span>
+        <select value={size} onChange={(e) => onSize(Number(e.target.value))} style={S.smallSelect}>
+          {PAGE_SIZES.map((s) => <option key={s} value={s}>{s} / page</option>)}
+        </select>
+      </div>
+      <div style={{ display: "flex", gap: 4 }}>
+        <button style={S.pageBtn} disabled={page === 0} onClick={() => onPage(0)}>«</button>
+        <button style={S.pageBtn} disabled={page === 0} onClick={() => onPage(page - 1)}>‹</button>
+        {nums.map((i) => (
+          <button key={i} onClick={() => onPage(i)}
+            style={{ ...S.pageBtn, background: page === i ? "#2563eb" : "white", color: page === i ? "white" : "#374151" }}>
+            {i + 1}
+          </button>
         ))}
-      </td>
-      <td style={styles.td}>{u.version}</td>
-      <td style={styles.td}>{u.reportingTo}</td>
-      <td style={styles.td}>
-        <div style={styles.geoBox}>
-          {u.geofenceNames?.map((g, idx) => (
-            <div key={idx}>{typeof g === "string" ? g : ""}</div>
+        <button style={S.pageBtn} disabled={page >= totalPages - 1} onClick={() => onPage(page + 1)}>›</button>
+        <button style={S.pageBtn} disabled={page >= totalPages - 1} onClick={() => onPage(totalPages - 1)}>»</button>
+      </div>
+    </div>
+  );
+});
+
+// ─── SearchDropdown ───────────────────────────────────────────
+const SearchDropdown = React.memo(({ label, value, options, onSelect, onClear, labelKey = "login", valueKey = "id" }) => {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef();
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const filtered = useMemo(() => options.filter((o) => (o[labelKey] || "").toLowerCase().includes(q.toLowerCase())), [options, q, labelKey]);
+  const selected = options.find((o) => o[valueKey] == value);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button onClick={() => setOpen((p) => !p)} style={{ ...S.dropBtn, background: value ? "#eff6ff" : "white" }}>
+        {selected ? selected[labelKey] : label}
+        <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.5 }}>▼</span>
+      </button>
+      {open && (
+        <div style={S.dropMenu}>
+          <input autoFocus placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={S.dropSearch} />
+          <div style={S.dropList}>
+            <div style={{ ...S.dropItem, color: "#2563eb", fontWeight: 600 }}
+              onClick={() => { onClear(); setOpen(false); setQ(""); }}>All</div>
+            {filtered.map((o) => (
+              <div key={o[valueKey]}
+                style={{ ...S.dropItem, background: value == o[valueKey] ? "#eff6ff" : "white" }}
+                onClick={() => { onSelect(o[valueKey]); setOpen(false); setQ(""); }}>
+                {o[labelKey]}
+                {o.firstName && <span style={{ fontSize: 11, color: "#6b7280", marginLeft: 4 }}>({o.firstName} {o.lastName})</span>}
+              </div>
+            ))}
+            {filtered.length === 0 && <div style={{ padding: "8px 10px", color: "#9ca3af", fontSize: 13 }}>No results</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ─── MultiCheckDropdown ───────────────────────────────────────
+const MultiCheckDropdown = React.memo(({ label, options, selected, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef();
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const filtered = useMemo(() => options.filter((o) => o.toLowerCase().includes(q.toLowerCase())), [options, q]);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button onClick={() => setOpen((p) => !p)} style={{ ...S.dropBtn, background: selected.length ? "#eff6ff" : "white" }}>
+        {label} {selected.length > 0 && `(${selected.length})`}
+        <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.5 }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ ...S.dropMenu, minWidth: 220 }}>
+          <div style={{ display: "flex", gap: 4, padding: "6px 8px" }}>
+            <button style={S.miniBtn} onClick={() => onChange(options)}>All</button>
+            <button style={S.miniBtn} onClick={() => onChange([])}>None</button>
+            <button style={{ ...S.miniBtn, marginLeft: "auto" }} onClick={() => setOpen(false)}>Done</button>
+          </div>
+          <input autoFocus placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={S.dropSearch} />
+          <div style={S.dropList}>
+            {filtered.map((r) => (
+              <label key={r} style={{ ...S.dropItem, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                <input type="checkbox" checked={selected.includes(r)}
+                  onChange={() => onChange(selected.includes(r) ? selected.filter((x) => x !== r) : [...selected, r])} />
+                {r}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ─── ViewModal ────────────────────────────────────────────────
+const ViewModal = React.memo(({ user, onClose }) => {
+  if (!user) return null;
+  const HIDDEN = new Set(["geofences", "groups", "vendors", "trakeyeType", "trakeyeTypeAttribute", "trakeyeTypeAttributeValues", "vendor"]);
+  return (
+    <div style={S.overlay}>
+      <div style={{ ...S.modal, width: 560 }}>
+        <div style={S.modalHead}>
+          <h3 style={{ margin: 0 }}>User Details</h3>
+          <button style={S.closeBtn} onClick={onClose}>✖</button>
+        </div>
+        <div style={S.scrollBox}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <tbody>
+              {Object.entries(user).map(([k, v]) => {
+                if (HIDDEN.has(k)) return null;
+                let display;
+                if (k === "activated") display = <span style={{ color: v ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{v ? "Active" : "Inactive"}</span>;
+                else if (k === "authorities") display = v?.map((r, i) => <div key={i}>{r}</div>);
+                else if (k === "ownedBy") display = v?.map((x) => x.login).join(", ");
+                else if (k === "geofenceNames") display = v?.join(", ");
+                else display = Array.isArray(v) ? v.join(", ") : String(v ?? "");
+                return (
+                  <tr key={k}>
+                    <td style={S.detailKey}>{k}</td>
+                    <td style={S.td}>{display}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ─── EditModal ────────────────────────────────────────────────
+const EditModal = React.memo(({ editUser, setEditUser, blocks, rolesList, reportingList, selectedBlocks, setSelectedBlocks, selectedRoles, setSelectedRoles, selectedReporting, setSelectedReporting, onSave, onCancel }) => {
+  const [blockQ, setBlockQ] = useState("");
+  const [roleQ, setRoleQ] = useState("");
+
+  const filteredBlocks = useMemo(() => blocks.filter((b) => isValidBlock(b) && b.name.toLowerCase().includes(blockQ.toLowerCase())), [blocks, blockQ]);
+  const filteredRoles = useMemo(() => rolesList.filter((r) => (r.configKey || r.configValue || r.name || "").toLowerCase().includes(roleQ.toLowerCase())), [rolesList, roleQ]);
+
+  if (!editUser) return null;
+  return (
+    <div style={S.overlay}>
+      <div style={{ ...S.modal, width: 620 }}>
+        <div style={S.modalHead}>
+          <h3 style={{ margin: 0 }}>Edit — {editUser.login}</h3>
+          <button style={S.closeBtn} onClick={onCancel}>✖</button>
+        </div>
+        <div style={S.scrollBox}>
+          {[["First Name", "firstName"], ["Last Name", "lastName"], ["Phone", "phone"], ["Email", "email"], ["GPS IMEI", "gpsimei"]].map(([label, field]) => (
+            <div key={field} style={S.formRow}>
+              <label style={S.formLabel}>{label}</label>
+              <input style={S.formInput} value={editUser[field] || ""}
+                onChange={(e) => setEditUser((u) => ({ ...u, [field]: e.target.value }))} />
+            </div>
+          ))}
+          <div style={S.formRow}>
+            <label style={S.formLabel}>Status</label>
+            <select style={S.formInput} value={editUser.activated ? "active" : "inactive"}
+              onChange={(e) => setEditUser((u) => ({ ...u, activated: e.target.value === "active" }))}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.formLabel}>Reporting To</label>
+            <select style={S.formInput} value={selectedReporting?.id || ""}
+              onChange={(e) => setSelectedReporting(reportingList.find((r) => r.id == e.target.value) || null)}>
+              <option value="">Select manager</option>
+              {reportingList.map((r) => (
+                <option key={r.id} value={r.id}>{r.login} ({r.firstName} {r.lastName})</option>
+              ))}
+            </select>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.formLabel}>Roles ({selectedRoles.length})</label>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                {selectedRoles.map((r) => (
+                  <span key={r} style={S.chip}>{r}
+                    <span style={{ cursor: "pointer", marginLeft: 4 }} onClick={() => setSelectedRoles((p) => p.filter((x) => x !== r))}>×</span>
+                  </span>
+                ))}
+              </div>
+              <input placeholder="Search roles…" value={roleQ} onChange={(e) => setRoleQ(e.target.value)} style={{ ...S.formInput, marginBottom: 4 }} />
+              <div style={{ maxHeight: 130, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 4, padding: 4 }}>
+                {filteredRoles.map((r, i) => {
+                  const name = r.configKey || r.configValue || r.name || "";
+                  return (
+                    <label key={r.id || i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 4px", cursor: "pointer", fontSize: 13 }}>
+                      <input type="checkbox" checked={selectedRoles.includes(name)}
+                        onChange={() => setSelectedRoles((p) => p.includes(name) ? p.filter((x) => x !== name) : [...p, name])} />
+                      {name || "(unnamed)"}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.formLabel}>Blocks ({selectedBlocks.length})</label>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                {blocks.filter((b) => isValidBlock(b) && selectedBlocks.includes(b.id)).map((b) => (
+                  <span key={b.id} style={S.chip}>{b.name}
+                    <span style={{ cursor: "pointer", marginLeft: 4 }} onClick={() => setSelectedBlocks((p) => p.filter((id) => id !== b.id))}>×</span>
+                  </span>
+                ))}
+              </div>
+              <input placeholder="Search blocks…" value={blockQ} onChange={(e) => setBlockQ(e.target.value)} style={{ ...S.formInput, marginBottom: 4 }} />
+              <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 4, padding: 4 }}>
+                {filteredBlocks.map((b) => (
+                  <label key={b.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 4px", cursor: "pointer", fontSize: 13, background: selectedBlocks.includes(b.id) ? "#eff6ff" : "transparent", borderRadius: 3 }}>
+                    <input type="checkbox" checked={selectedBlocks.includes(b.id)}
+                      onChange={() => setSelectedBlocks((p) => p.includes(b.id) ? p.filter((id) => id !== b.id) : [...p, b.id])} />
+                    {b.name} <span style={{ color: "#9ca3af", fontSize: 11 }}>({b.geofenceType})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 12 }}>
+          <button style={S.saveBtnLarge} onClick={onSave}>Save Changes</button>
+          <button style={S.cancelBtnLarge} onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ─── HierarchyEditModal ───────────────────────────────────────
+const HierarchyEditModal = React.memo(({ user, reportingList, onSave, onCancel }) => {
+  const [selectedId, setSelectedId] = useState("");
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => reportingList.filter((r) => r.login?.toLowerCase().includes(q.toLowerCase())), [reportingList, q]);
+  if (!user) return null;
+  return (
+    <div style={S.overlay}>
+      <div style={{ ...S.modal, width: 420 }}>
+        <div style={S.modalHead}>
+          <h3 style={{ margin: 0 }}>Edit Reporting</h3>
+          <button style={S.closeBtn} onClick={onCancel}>✖</button>
+        </div>
+        <p style={{ margin: "0 0 12px", color: "#374151" }}>User: <strong>{user.login}</strong></p>
+        <input autoFocus placeholder="Search manager…" value={q} onChange={(e) => setQ(e.target.value)} style={{ ...S.formInput, marginBottom: 6 }} />
+        <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 6 }}>
+          {filtered.map((r) => (
+            <div key={r.id} onClick={() => setSelectedId(r.id)}
+              style={{ padding: "10px 12px", cursor: "pointer", background: selectedId == r.id ? "#eff6ff" : "white", borderBottom: "1px solid #f3f4f6" }}>
+              <strong>{r.login}</strong>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>{r.firstName} {r.lastName}</div>
+            </div>
           ))}
         </div>
-      </td>
-      <td style={styles.td}>
-        <button className="icon-btn view" onClick={() => onView(u)} title="View User">
-          <FaEye />
-        </button>
-        <button className="icon-btn edit" onClick={() => onEdit(u)} title="Edit User">
-          <FaEdit />
-        </button>
-      </td>
-    </tr>
-  ));
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+          <button style={S.saveBtnLarge} onClick={() => onSave(selectedId)}>Save</button>
+          <button style={S.cancelBtnLarge} onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ─── BulkPanel ────────────────────────────────────────────────
+const BulkPanel = React.memo(({ selectedLogins, reportingList, onUpdate, onClearAll, onRemoveOne }) => {
+  const [selectedId, setSelectedId] = useState("");
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  if (selectedLogins.length === 0) return null;
+
+  const filtered = reportingList.filter((r) => r.login?.toLowerCase().includes(q.toLowerCase()));
+  const chosen = reportingList.find((r) => r.id == selectedId);
 
   return (
-    <div style={styles.page}>
-<h2>User Dashboard(s)</h2>
-
-<div style={styles.topBar}>
-
-  {/* 🔍 SEARCH */}
-  <div style={styles.searchWrapper}>
-    <span style={styles.searchIcon}>🔍</span>
-    <input
-      placeholder="Search users..."
-      style={styles.searchInput}
-      value={searchInput}
-      onChange={(e) => setSearchInput(e.target.value)}
-    />
-  </div>
-
-  {/* BUTTONS */}
-  <div style={styles.topActions}>
-    <button
-      style={styles.primaryBtn}
-      onClick={() => setShowFilters(prev => !prev)}
-    >
-      ☰ Filters
-    </button>
-
-    <button
-      style={styles.secondaryBtn}
-      onClick={async () => {
-  // Create new AbortController for this hierarchy session
-  const controller = new AbortController();
-  setHierarchyAbortController(controller);
-
-  setShowHierarchy(true);
-  setHierarchyLoading(true);
-
-  try {
-    const res = await axios.get("https://user-extract.onrender.com/api/hierarchy/root", {
-      signal: controller.signal
-    });
-    
-    // ✅ Enrich hierarchy data with user details
-    let hierarchyDataRaw = Array.isArray(res.data) ? res.data : [res.data];
-    setHierarchyData(
-Array.isArray(
-hierarchyDataRaw
-)
-?hierarchyDataRaw
-:[hierarchyDataRaw]
-);
-  } catch (err) {
-    if (err.name !== 'AbortError') {
-      console.error("Hierarchy API error:", err);
-      setHierarchyData([]); // prevent crash
-      alert("Hierarchy API not available ❌");
-    }
-  } finally {
-    setHierarchyLoading(false);
-  }
-}}
-    >
-       Hierarchy
-    </button>
-  </div>
-
-</div>
-
-      {/* BULK CARD */}
-{selectedUsers.length > 0 && (
-  <div style={{
-    border: "1px solid #ccc",
-    padding: "10px",
-    marginTop: "10px",
-    borderRadius: "6px",
-    background: "#f9fafb"
-  }}>
-    <h4>Selected Users ({selectedUsers.length})</h4>
-
-    {/* ✅ USER CHIPS WITH REMOVE */}
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
-      {selectedUsers.map(login => (
-        <span key={login} style={{ ...styles.chip, display: "flex", alignItems: "center", gap: "5px" }}>
-          {login}
-          <span
-            style={{ cursor: "pointer", color: "blue", fontWeight: "bold" }}
-            onClick={() =>
-              setSelectedUsers(prev => prev.filter(u => u !== login))
-            }
-          >
-            ✖
+    <div style={S.bulkPanel}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+        {selectedLogins.map((l) => (
+          <span key={l} style={S.chip}>{l}
+            <span style={{ cursor: "pointer", marginLeft: 4 }} onClick={() => onRemoveOne(l)}>×</span>
           </span>
-        </span>
-      ))}
-    </div>
-
-    {/* ✅ CUSTOM DROPDOWN WITH SEARCH INSIDE */}
-    <div style={{ position: "relative", width: "250px", marginBottom: "10px" }}>
-
-      <div
-        style={{
-          border: "1px solid #ccc",
-          padding: "8px",
-          cursor: "pointer",
-          background: "white"
-        }}
-        onClick={() => setShowBulkDropdown(prev => !prev)}
-      >
-        {bulkReportingTo
-          ? reportingListEdit.find(r => r.id == bulkReportingTo)?.login
-          : "Select Reporting To"}
-      </div>
-
-      {showBulkDropdown && (
-        <div style={{
-          position: "absolute",
-          top: "100%",
-          left: 0,
-          width: "100%",
-          background: "white",
-          border: "1px solid #ccc",
-          zIndex: 1000,
-          padding: "8px"
-        }}>
-
-          {/* 🔍 SEARCH INSIDE DROPDOWN */}
-          <input
-            placeholder="Search..."
-            value={bulkReportSearch}
-            onChange={(e) => setBulkReportSearch(e.target.value)}
-            style={{ ...styles.input, width: "100%", boxSizing: "border-box", marginBottom: "8px" }}
-          />
-
-          <div style={{ maxHeight: "150px", overflowY: "auto" }}>
-            {reportingListEdit
-              .filter(r =>
-                r.login?.toLowerCase().includes(bulkReportSearch.toLowerCase())
-              )
-              .map(r => (
-                <div
-                  key={r.id}
-                  style={{ padding: "6px", cursor: "pointer" }}
-                  onClick={() => {
-                    setBulkReportingTo(r.id);
-                   setShowBulkDropdown(false);
-                    setBulkReportSearch("");
-                  }}
-                >
-                  {r.login} ({r.firstName} {r.lastName})
-                </div>
-              ))}
-          </div>
-
-        </div>
-      )}
-    </div>
-
-    {/* ✅ ACTION BUTTONS */}
-    <div style={{ display: "flex", gap: "10px" }}>
-
-      <button
-        style={styles.editBtn}
-        onClick={handleBulkUpdate}
-      >
-        Update Reporting
-      </button>
-
-      {/* ❌ REMOVE ALL BUTTON BESIDE */}
-      <button
-        style={{ background: "red", color: "white", border: "none", padding: "5px 10px", cursor: "pointer" }}
-        onClick={() => setSelectedUsers([])}
-      >
-        Remove All
-      </button>
-
-    </div>
-  </div>
-)}
-{showBulkPopup && (
-  <div style={styles.modalOverlay}>
-    <div style={styles.modalBox}>
-
-      <h3>Reporting Updated ✅</h3>
-
-      <div style={{ maxHeight: "200px", overflowY: "auto" }}>
-        {updatedUsers.map(u => (
-          <div key={u}>{u}</div>
         ))}
       </div>
-
-      <button onClick={() => setShowBulkPopup(false)}>
-        Close
-      </button>
-
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ position: "relative" }}>
+          <button style={{ ...S.dropBtn, minWidth: 200 }} onClick={() => setOpen((p) => !p)}>
+            {chosen ? chosen.login : "Select reporting manager"}
+            <span style={{ marginLeft: "auto", fontSize: 10, opacity: 0.5 }}>▼</span>
+          </button>
+          {open && (
+            <div style={{ ...S.dropMenu, minWidth: 240, zIndex: 2000 }}>
+              <input autoFocus placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={S.dropSearch} />
+              <div style={S.dropList}>
+                {filtered.map((r) => (
+                  <div key={r.id} style={{ ...S.dropItem, background: selectedId == r.id ? "#eff6ff" : "white" }}
+                    onClick={() => { setSelectedId(r.id); setOpen(false); setQ(""); }}>
+                    {r.login} <span style={{ fontSize: 11, color: "#6b7280" }}>({r.firstName} {r.lastName})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <button style={S.saveBtnLarge} onClick={() => onUpdate(selectedId)}>Update Reporting</button>
+        <button style={{ ...S.cancelBtnLarge, background: "#fee2e2", color: "#dc2626" }} onClick={onClearAll}>Remove All</button>
+      </div>
     </div>
-  </div>
+  );
+});
+
+// ─── find node helper ─────────────────────────────────────────
+function findNodeByLogin(nodes, login) {
+  for (const n of nodes) {
+    if (n.login === login) return n;
+    if (n.children?.length) {
+      const f = findNodeByLogin(n.children, login);
+      if (f) return f;
+    }
+  }
+  return null;
+}
+
+function convertToD3(nodes) {
+  if (!nodes?.length) return null;
+  const build = (n) => ({
+    id: n.id, login: n.login, name: n.login,
+    attributes: { fullName: `${n.firstName || ""} ${n.lastName || ""}`.trim() },
+    hasChildren: n.hasChildren,
+    children: n.children?.length ? n.children.map(build) : [],
+  });
+  return build(nodes[0]);
+}
+
+// ─── HierarchyD3Node ──────────────────────────────────────────
+const HierarchyD3Node = React.memo(({ nodeDatum, toggleNode, hierarchyData, loadChildren, reloadAllData, setLoading, openHierarchyEdit, highlightedUser, reportingListEdit, setReportingListEdit }) => {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: "USER",
+    item: { login: nodeDatum.name, id: nodeDatum.id },
+    collect: (m) => ({ isDragging: !!m.isDragging() }),
+  }));
+  const [{ isOver }, drop] = useDrop(() => ({
+    accept: "USER",
+    collect: (m) => ({ isOver: !!m.isOver() }),
+    drop: async (draggedItem) => {
+      if (draggedItem.login === nodeDatum.name) return;
+      try {
+        setLoading(true);
+        const { data: user } = await api.get(`/user/${draggedItem.login}`);
+        const target = findNodeByLogin(hierarchyData, nodeDatum.name);
+        if (!target) return alert("Target not found");
+        await api.put("/edit-user", { ...user, geofences: user.geofences?.map((g) => g.id || g) || [], reportingTo: target.id });
+        alert("Hierarchy updated ✅");
+        await reloadAllData();
+      } catch { alert("Update failed ❌"); }
+      finally { setLoading(false); }
+    },
+  }));
+
+  const bg = highlightedUser === nodeDatum.name ? "#f59e0b" : isOver ? "#fbbf24" : nodeDatum.hasChildren ? "#16a34a" : "#2563eb";
+
+  return (
+    <foreignObject width="220" height="110" x="-110" y="-45" style={{ pointerEvents: "auto" }}>
+      <div ref={(n) => { drag(drop(n)); }}
+        style={{ background: bg, padding: "10px 12px", borderRadius: 8, color: "white", cursor: isDragging ? "grabbing" : "grab", opacity: isDragging ? 0.5 : 1, boxShadow: "0 3px 8px rgba(0,0,0,.25)", userSelect: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}
+        onClick={async (e) => {
+          e.stopPropagation();
+          if (nodeDatum.hasChildren && (!nodeDatum.children || nodeDatum.children.length === 0)) {
+            await loadChildren(nodeDatum.name);
+          }
+          toggleNode?.();
+        }}>
+        <div style={{ fontWeight: 600, fontSize: 13 }}>{nodeDatum.name}</div>
+        {nodeDatum.attributes?.fullName && <div style={{ fontSize: 11, opacity: 0.85 }}>{nodeDatum.attributes.fullName}</div>}
+        <button
+          onClick={async (e) => {
+            e.stopPropagation();
+            try {
+              const { data: user } = await api.get(`/user/${nodeDatum.name}`);
+              if (reportingListEdit.length === 0) {
+                const { data } = await api.get("/reporting-users");
+                setReportingListEdit(data || []);
+              }
+              openHierarchyEdit(user);
+            } catch { alert("Failed to load user ❌"); }
+          }}
+          style={{ background: "rgba(255,255,255,0.25)", border: "1px solid rgba(255,255,255,0.4)", color: "white", padding: "3px 8px", borderRadius: 4, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
+          ✎ Edit Reporting
+        </button>
+      </div>
+    </foreignObject>
+  );
+});
+
+// ══════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ══════════════════════════════════════════════════════════════
+export default function UsersTable() {
+  // ── pagination ──
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState(10);
+
+  // ── filter state (all in one object for easy param building) ──
+  const [searchInput, setSearchInput] = useState("");
+  const [filterReportingTo, setFilterReportingTo] = useState("");
+  const [filterRoles, setFilterRoles] = useState([]);
+  const [filterStatus, setFilterStatus] = useState(""); // "", "true", "false"
+  const [filterDistrict, setFilterDistrict] = useState("");
+  const [filterBlocks, setFilterBlocks] = useState([]);
+
+  // ── server data ──
+  const [users, setUsers] = useState([]);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [districts, setDistricts] = useState([]);
+  const [districtBlocks, setDistrictBlocks] = useState([]);
+  const [rolesList, setRolesList] = useState([]);
+  const [reportingList, setReportingList] = useState([]);
+
+  // ── UI flags ──
+  const [loading, setLoading] = useState(false);
+  const [blocksLoading, setBlocksLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filtersApplied, setFiltersApplied] = useState(false);
+
+  // ── pending filter state (not yet applied) ──
+  const [pendingReportingTo, setPendingReportingTo] = useState("");
+  const [pendingRoles, setPendingRoles] = useState([]);
+  const [pendingStatus, setPendingStatus] = useState("");
+  const [pendingDistrict, setPendingDistrict] = useState("");
+  const [pendingBlocks, setPendingBlocks] = useState([]);
+
+  // ── modals ──
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [editUser, setEditUser] = useState(null);
+  const [editSelectedBlocks, setEditSelectedBlocks] = useState([]);
+  const [editSelectedRoles, setEditSelectedRoles] = useState([]);
+  const [editSelectedReporting, setEditSelectedReporting] = useState(null);
+  const [editBlocks, setEditBlocks] = useState([]);
+  const [editRolesList, setEditRolesList] = useState([]);
+
+  // ── bulk ──
+  const [selectedUsers, setSelectedUsers] = useState([]);
+
+  // ── hierarchy ──
+  const [showHierarchy, setShowHierarchy] = useState(false);
+  const [hierarchyData, setHierarchyData] = useState([]);
+  const [hierarchyLoading, setHierarchyLoading] = useState(false);
+  const [highlightedUser, setHighlightedUser] = useState("");
+  const [hierarchySearch, setHierarchySearch] = useState("");
+  const [searchingHierarchy, setSearchingHierarchy] = useState(false);
+  const [hierarchyEditUser, setHierarchyEditUser] = useState(null);
+  const [hierarchyKey, setHierarchyKey] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  const loadedHierarchyNodes = useRef(new Set());
+  const abortRef = useRef(null);
+  const fetchAbortRef = useRef(null);
+
+  // Debounce only the search input
+  const debouncedSearch = useDebounce(searchInput, 500);
+const appliedFilters = useMemo(() => ({
+   search: debouncedSearch,
+   reportingTo: filterReportingTo,
+   roles: filterRoles,
+   blocks: filterBlocks,
+   status: filterStatus
+}),[
+   debouncedSearch,
+   filterReportingTo,
+   filterRoles,
+   filterBlocks,
+   filterStatus
+])
+  // ── reset page when search or applied filters change ──
+  useEffect(() => { setPage(0); }, [debouncedSearch, filterReportingTo, filterRoles, filterStatus, filterBlocks]);
+
+  // ── CORE: fetch only the current page from server ──
+  useEffect(()=>{
+
+fetchAbortRef.current?.abort();
+
+const controller=new AbortController();
+
+fetchAbortRef.current=controller;
+
+const fetchUsers=async()=>{
+
+try{
+
+setLoading(true);
+
+const query=buildParams(
+appliedFilters,
+page,
+size
+)
+
+const res=await api.get(
+`/users-summary?${query}`,
+{
+signal:controller.signal
+}
+)
+
+const response = res.data || {};
+
+console.log("API RESPONSE:",response);
+
+setUsers(
+    Array.isArray(response.content)
+        ? response.content
+        : []
+)
+
+setTotalUsers(
+    response.totalElements || 0
+)
+}
+catch(err){
+
+if(
+err.name!=="CanceledError" &&
+err.code!=="ERR_CANCELED"
+){
+
+console.log(err)
+
+}
+
+}
+finally{
+
+if(!controller.signal.aborted){
+
+setLoading(false)
+
+}
+
+}
+
+}
+
+fetchUsers();
+
+return()=>{
+
+controller.abort()
+
+}
+
+},[
+page,
+size,
+appliedFilters
+])
+
+  // ── fetch reference data once ──
+  useEffect(() => {
+    api.get("/districts").then(({ data }) => setDistricts(data || []));
+    api.get("/reporting-users").then(({ data }) => setReportingList(Array.isArray(data) ? data : []));
+    api.get("/roles").then(({ data }) => {
+      const roles = Array.isArray(data) ? data : [];
+      setRolesList(roles);
+      setEditRolesList(roles);
+    });
+  }, []);
+
+  // ── fetch blocks when district selected (in filter panel) ──
+  useEffect(() => {
+
+if (!pendingDistrict) {
+
+setDistrictBlocks([]);
+setPendingBlocks([]);
+
+return;
+
+}
+
+setBlocksLoading(true);
+
+api.get(`/blocks/${pendingDistrict}`)
+
+.then(({data})=>{
+
+const v=
+(data||[])
+.filter(isValidBlock);
+
+setDistrictBlocks(v);
+
+setPendingBlocks([]);
+
+})
+
+.catch(()=>{
+
+setDistrictBlocks([]);
+setPendingBlocks([]);
+
+})
+
+.finally(()=>{
+
+setBlocksLoading(false);
+
+});
+
+},[pendingDistrict]);
+
+  // ── Apply filters ──
+  const applyFilters = useCallback(() => {
+    setFilterReportingTo(pendingReportingTo);
+    setFilterRoles(pendingRoles);
+    setFilterStatus(pendingStatus);
+    setFilterDistrict(pendingDistrict);
+    setFilterBlocks(pendingBlocks);
+    setFiltersApplied(
+      !!(pendingReportingTo || pendingRoles.length || pendingStatus || pendingDistrict || pendingBlocks.length)
+    );
+    setPage(0);
+  }, [pendingReportingTo, pendingRoles, pendingStatus, pendingDistrict, pendingBlocks]);
+
+  // ── Clear all filters ──
+  const clearAllFilters = useCallback(() => {
+    setPendingReportingTo(""); setPendingRoles([]); setPendingStatus("");
+    setPendingDistrict(""); setPendingBlocks([]);
+    setFilterReportingTo(""); setFilterRoles([]); setFilterStatus("");
+    setFilterDistrict(""); setFilterBlocks([]);
+    setFiltersApplied(false);
+    setPage(0);
+  }, []);
+
+  // ── reload ──
+ const reloadAllData=async()=>{
+
+try{
+
+setLoading(true)
+
+const q=buildParams(
+appliedFilters,
+page,
+size
+)
+
+const [usersRes,hierarchyRes]=
+await Promise.all([
+
+api.get(
+`/users-summary?${q}`
+),
+
+api.get(
+"/hierarchy/root"
+)
+
+])
+
+setUsers(
+Array.isArray(
+usersRes.data?.content
+)
+?usersRes.data.content
+:[]
+)
+
+setTotalUsers(
+Number(
+usersRes.data?.totalElements
+)||0
+)
+
+setHierarchyData(
+Array.isArray(hierarchyRes.data)
+?hierarchyRes.data
+:[hierarchyRes.data]
+)
+
+}
+catch(e){
+
+console.log(e)
+
+}
+finally{
+
+setLoading(false)
+
+}
+
+}
+const handleView = useCallback(async (u) => {
+  try {
+    setLoading(true);
+
+    const { data } = await api.get(`/user/${u.login}`);
+
+    setSelectedUser(data);
+
+  } catch (e) {
+
+    console.log(e);
+    alert("Failed to load user ❌");
+
+  } finally {
+
+    setLoading(false);
+
+  }
+}, []);
+  // ── edit modal ──
+  const handleOpenEdit = useCallback(async (u) => {
+    setLoading(true);
+    try {
+      const [userRes, geoRes, rolesRes] = await Promise.all([
+        api.get(`/user/${u.login}`),
+        api.get("/geofences"),
+        api.get("/roles"),
+      ]);
+      const full = userRes.data;
+      setEditUser({
+        id: full.id, login: full.login, firstName: full.firstName || "",
+        lastName: full.lastName || "", email: full.email || "", phone: full.phone || "",
+        gpsimei: full.gpsimei || "", activated: full.activated ?? true,
+        authorities: full.authorities || [], geofences: full.geofences || [],
+        ownedBy: full.ownedBy || [], langKey: full.langKey || "en",
+      });
+      setEditSelectedRoles(full.authorities || []);
+      setEditSelectedReporting(full.ownedBy?.[0] ? reportingList.find((r) => r.id === full.ownedBy[0].id) || null : null);
+      const geoIds = (full.geofences || []).map((g) => (typeof g === "object" ? g.id : g));
+      setEditSelectedBlocks(geoIds);
+      const allGeo = [
+        ...(Array.isArray(geoRes.data?.masters) ? geoRes.data.masters : []),
+        ...(Array.isArray(geoRes.data?.minis) ? geoRes.data.minis : []),
+      ].filter(isValidBlock);
+      setEditBlocks(allGeo);
+      setEditRolesList(Array.isArray(rolesRes.data) ? rolesRes.data : []);
+    } catch { alert("Failed to load user ❌"); }
+    finally { setLoading(false); }
+  }, [reportingList]);
+
+  const handleSave = useCallback(async () => {
+    if (!editUser) return;
+    const payload = {
+      id: editUser.id, login: editUser.login,
+      firstName: editUser.firstName, lastName: editUser.lastName,
+      email: editUser.email, phone: editUser.phone,
+      gpsimei: editUser.gpsimei, activated: editUser.activated,
+      langKey: editUser.langKey,
+      authorities: editSelectedRoles.map((r) => typeof r === "string" ? r : r?.configValue || ""),
+      geofences: editSelectedBlocks,
+      reportingTo: editSelectedReporting?.id || null,
+    };
+    try {
+      await api.put("/edit-user", payload);
+      setEditUser(null); setEditBlocks([]); setEditSelectedBlocks([]);
+      await reloadAllData();
+      alert("Updated ✅");
+    } catch (e) { console.error(e.response?.data); alert("Update failed ❌"); }
+  }, [editUser, editSelectedRoles, editSelectedBlocks, editSelectedReporting, reloadAllData]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditUser(null); setEditBlocks([]); setEditSelectedBlocks([]);
+  }, []);
+
+  // ── bulk update ──
+  const handleBulkUpdate = useCallback(async (reportingId) => {
+    if (!reportingId) { alert("Select a reporting manager ❌"); return; }
+    if (selectedUsers.length === 0) { alert("Select users ❌"); return; }
+    try {
+      await api.put("/bulk-update-reporting", { logins: selectedUsers, reportingTo: Number(reportingId) });
+      setSelectedUsers([]);
+      await reloadAllData();
+      alert("Bulk update done ✅");
+    } catch { alert("Bulk update failed ❌"); }
+  }, [selectedUsers, reloadAllData]);
+
+  const allPageSelected = users.length > 0 && users.every((u) => selectedUsers.includes(u.login));
+  const handleToggleAll = useCallback((checked) => {
+    const logins = users.map((u) => u.login);
+    setSelectedUsers((prev) => checked ? [...new Set([...prev, ...logins])] : prev.filter((l) => !logins.includes(l)));
+  }, [users]);
+  const handleToggleOne = useCallback((login, checked) => {
+    setSelectedUsers((prev) => checked ? [...prev, login] : prev.filter((l) => l !== login));
+  }, []);
+
+  // ── EXPORT: uses current APPLIED filters, fetches all matching rows ──
+  
+      // Build filename to reflect active filters
+      const downloadFiltered=async()=>{
+
+try{
+
+setDownloading(true)
+
+const q=buildParams(
+appliedFilters,
+0,
+totalUsers
+)
+
+const res=await api.get(
+`/users-summary?${q}`
+)
+
+const allData=
+res.data.content || []
+
+const excel=allData.map(u=>({
+
+Login:u.login,
+
+Name:u.name,
+
+Phone:u.phone,
+
+Status:
+u.activated
+?"Active"
+:"Inactive",
+
+Roles:
+u.roles?.join(","),
+
+Reporting:
+u.reportingTo,
+
+Version:
+u.version
+
+}))
+
+const ws=
+XLSX.utils.json_to_sheet(excel)
+
+const wb=
+XLSX.utils.book_new()
+
+XLSX.utils.book_append_sheet(
+wb,
+ws,
+"Users"
+)
+
+XLSX.writeFile(
+wb,
+"users.xlsx"
+)
+
+}
+catch(e){
+
+console.log(e)
+
+}
+finally{
+
+setDownloading(false)
+
+}
+
+}
+
+  // ── hierarchy ──
+  const loadChildren = useCallback(async (login) => {
+    if (loadedHierarchyNodes.current.has(login)) return;
+    loadedHierarchyNodes.current.add(login);
+    try {
+      const { data } = await api.get(`/hierarchy/children/${login}`);
+      const children = (Array.isArray(data) ? data : []).map((c) => ({ ...c, children: c.children || [] }));
+      setHierarchyData((prev) => {
+        const update = (nodes) => nodes.map((n) =>
+          n.login === login ? { ...n, children } : n.children ? { ...n, children: update(n.children) } : n
+        );
+        return [...update(prev)];
+      });
+      setHierarchyKey((k) => k + 1);
+    } catch (e) { if (e.name !== "AbortError") console.error(e); }
+  }, []);
+
+  const openHierarchyEdit = useCallback((user) => setHierarchyEditUser(user), []);
+
+  const handleHierarchyEditSave = useCallback(async (reportingId) => {
+    if (!hierarchyEditUser || !reportingId) return;
+    try {
+      const { data: user } = await api.get(`/user/${hierarchyEditUser.login}`);
+      await api.put("/edit-user", { ...user, geofences: (user.geofences || []).map((g) => g.id || g), reportingTo: Number(reportingId) });
+      setHierarchyEditUser(null);
+      await reloadAllData();
+      alert("Updated ✅");
+    } catch { alert("Update failed ❌"); }
+  }, [hierarchyEditUser, reloadAllData]);
+
+  // ── hierarchy search ──
+  const debouncedHierarchySearch = useDebounce(hierarchySearch, 500);
+  useEffect(()=>{
+
+if(
+!debouncedHierarchySearch ||
+!showHierarchy
+){
+
+setHighlightedUser("")
+return
+
+}
+
+setSearchingHierarchy(true)
+
+const searchHierarchy=async()=>{
+
+try{
+
+const q=buildParams(
+{
+search:debouncedHierarchySearch
+},
+0,
+1000
+)
+
+const res=await api.get(
+`/users-summary?${q}`
+)
+
+const users=
+res.data?.content || []
+
+if(users.length){
+
+setHighlightedUser(
+users[0].login
+)
+
+}else{
+
+setHighlightedUser("")
+
+}
+
+}
+catch{
+
+setHighlightedUser("")
+
+}
+finally{
+
+setSearchingHierarchy(false)
+
+}
+
+}
+
+searchHierarchy()
+
+},[
+debouncedHierarchySearch,
+showHierarchy
+])
+
+  const openHierarchy = useCallback(async () => {
+    abortRef.current = new AbortController();
+    loadedHierarchyNodes.current.clear();
+    setShowHierarchy(true);
+    setHierarchyLoading(true);
+    try {
+      const { data } = await api.get("/hierarchy/root", { signal: abortRef.current.signal });
+      setHierarchyData(Array.isArray(data) ? data : [data]);
+    } catch (e) {
+      if (e.name !== "AbortError") { setHierarchyData([]); alert("Hierarchy unavailable ❌"); }
+    } finally { setHierarchyLoading(false); }
+  }, []);
+
+  const closeHierarchy = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setShowHierarchy(false);
+    setHighlightedUser(""); setHierarchySearch("");
+    setSearchingHierarchy(false); setHierarchyData([]);
+    loadedHierarchyNodes.current.clear();
+  }, []);
+
+  // pan/zoom
+  const handleWheel = useCallback((e) => {
+    e.preventDefault();
+    setZoom((z) => Math.min(3, Math.max(0.3, z + (e.deltaY > 0 ? -0.1 : 0.1))));
+  }, []);
+  const handleMouseDown = useCallback((e) => {
+    setIsPanning(true);
+    setPanStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+  }, [position]);
+  const handleMouseMove = useCallback((e) => {
+    if (!isPanning) return;
+    setPosition({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
+  }, [isPanning, panStart]);
+  const handleMouseUp = useCallback(() => setIsPanning(false), []);
+
+  // Derive role options from fetched rolesList + page data
+  const allRoles = useMemo(() => {
+    const fromApi = rolesList.map((r) => r.configKey || r.configValue || r.name || "").filter(Boolean);
+    const fromPage = new Set();
+    users.forEach((u) => u.roles?.forEach((r) => fromPage.add(r)));
+    return [...new Set([...fromApi, ...fromPage])].sort();
+  }, [rolesList, users]);
+
+  const reportingOptions = useMemo(() => reportingList.map((r) => ({ ...r, login: r.login || String(r.id) })), [reportingList]);
+
+  // Active filter count badge
+  const activeFilterCount = [filterReportingTo, filterStatus, filterDistrict].filter(Boolean).length + filterRoles.length + filterBlocks.length;
+
+  return (
+    <div style={S.page}>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        tr:hover td { background: #f9fafb !important; }
+      `}</style>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#111827" }}>User Dashboard</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#6b7280" }}>
+          {loading && <><Spinner size={14} inline /><span>Loading…</span></>}
+          {!loading && <span><strong style={{ color: "#111827" }}>{totalUsers.toLocaleString()}</strong> total users</span>}
+        </div>
+      </div>
+
+      {/* TOP BAR */}
+      <div style={S.topBar}>
+        <div style={S.searchBox}>
+          <span style={{ color: "#9ca3af", fontSize: 14 }}>🔍</span>
+          <input
+            placeholder="Search by login, name, phone…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            style={S.searchInput}
+          />
+          {searchInput && <button onClick={() => setSearchInput("")} style={S.clearBtn}>✕</button>}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={{ ...S.primaryBtn, position: "relative" }} onClick={() => setShowFilters((p) => !p)}>
+            ☰ Filters
+            {activeFilterCount > 0 && (
+              <span style={{ position: "absolute", top: -6, right: -6, background: "#dc2626", color: "white", borderRadius: 999, fontSize: 10, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, padding: "0 3px" }}>
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          <button style={S.primaryBtn} onClick={openHierarchy}>🌳 Hierarchy</button>
+          <button style={{ ...S.primaryBtn, background: downloading ? "#9ca3af" : "#059669" }} onClick={downloadFiltered} disabled={downloading} title={filtersApplied ? "Export filtered results" : "Export all users"}>
+            {downloading ? <><Spinner size={12} inline /> Exporting…</> : `⬇ Export${filtersApplied ? " (Filtered)" : ""}`}
+          </button>
+        </div>
+      </div>
+
+      {/* FILTER PANEL */}
+      {showFilters && (
+        <div style={S.filterPanel}>
+          <div style={{ width: "100%", display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-start" }}>
+            {/* Reporting To */}
+        <SearchDropdown
+label="Reporting To"
+value={pendingReportingTo}
+options={reportingOptions}
+valueKey="login"
+onSelect={setPendingReportingTo}
+onClear={() => setPendingReportingTo("")}
+/>
+
+            {/* Status */}
+            <select style={S.filterSelect} value={pendingStatus} onChange={(e) => setPendingStatus(e.target.value)}>
+              <option value="">All Status</option>
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </select>
+
+            {/* Roles */}
+            <MultiCheckDropdown label="Roles" options={allRoles} selected={pendingRoles} onChange={setPendingRoles} />
+
+            {/* District */}
+            <select style={S.filterSelect} value={pendingDistrict} onChange={(e) => setPendingDistrict(e.target.value)}>
+              <option value="">All Districts</option>
+              {districts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+
+            {/* Blocks (shows after district selected) */}
+          {pendingDistrict && districtBlocks.length>0 && (
+
+<MultiCheckDropdown
+
+label="Blocks"
+
+options={
+districtBlocks.map(
+b=>b.name
+)
+}
+
+selected={
+pendingBlocks
+}
+
+onChange={
+setPendingBlocks
+}
+
+/>
+
 )}
-      {loading && (
-        <div style={styles.loaderContainer}>
-          <div className="spinner"></div>
-          <span>Loading users...</span>
-        </div>
-      )}
-      {blocksLoading && (
-        <div style={styles.loaderContainer}>
-          <div className="spinner"></div>
-          <span>Loading blocks...</span>
-        </div>
-      )}
 
-      {/* FILTERS */}
-      
-
-       
-        {showFilters && (
-  <div style={styles.filterPanel}>
-
-        <div style={styles.dropdownWrapper}>
-          <button
-            style={styles.dropdownBtn}
-            onClick={() => setShowReportingDropdown(!showReportingDropdown)}
-          >
-            {selectedReportingTo || "Reporting To"}
-          </button>
-
-          {showReportingDropdown && (
-            <div style={styles.dropdownMenu}>
-              <input
-                type="text"
-                placeholder="Search..."
-                value={reportSearch}
-                onChange={(e) => setReportSearch(e.target.value)}
-                style={styles.input}
-              />
-              <div style={styles.dropdownList}>
-                <div
-                  style={{ ...styles.dropdownItem, fontWeight: "bold", color: "#2563eb" }}
-                  onClick={() => {
-                    setSelectedReportingTo("");
-                    setShowBulkDropdown(false);
-                    setReportSearch("");
-                  }}
-                >
-                  All Reporting
-                </div>
-                {reportingList
-                  .filter(r => r.toLowerCase().includes(reportSearch.toLowerCase()))
-                  .map(r => (
-                    <div
-                      key={r}
-                      style={styles.dropdownItem}
-                      onClick={() => {
-                        setSelectedReportingTo(r);
-                        setShowBulkDropdown(false);
-                        setReportSearch("");
-                      }}
-                    >
-                      {r}
-                    </div>
-                  ))}
-              </div>
-              <button
-                style={styles.closeDropdownBtn}
-                onClick={() => setShowReportingDropdown(false)}
-              >
-                Close
-              </button>
+            {/* Apply / Clear buttons */}
+            <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+              <button style={{ ...S.saveBtnLarge, background: "#f97316" }} onClick={applyFilters}>Apply Filters</button>
+              {filtersApplied && (
+                <button style={S.cancelBtnLarge} onClick={clearAllFilters}>Clear All</button>
+              )}
             </div>
-          )}
-        </div>
+          </div>
 
-        <select onChange={(e) => setSelectedDistrict(e.target.value)}>
-          <option value="">All District</option>
-          {districts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-
-        {/* ROLES */}
-        <div style={styles.dropdownWrapper}>
-          <button style={styles.dropdownBtn} onClick={() => setShowRoleDropdown(!showRoleDropdown)}>
-            Roles ({selectedRoles.length})
-          </button>
-
-          {showRoleDropdown && (
-            <div style={styles.dropdownMenu}>
-              <div style={styles.dropdownHeader}>
-                <button style={styles.dropdownActionBtn} onClick={() => setSelectedRoles(roles)}>✓ All</button>
-                <button style={styles.dropdownActionBtn} onClick={() => setSelectedRoles([])}>✕ None</button>
-                <button style={styles.dropdownActionBtn} onClick={() => setShowRoleDropdown(false)}>Done</button>
-              </div>
-              <input
-                placeholder="Search"
-                value={roleSearch}
-                onChange={(e) => setRoleSearch(e.target.value)}
-                style={styles.input}
-              />
-              <div style={styles.dropdownList}>
-                {roles
-                  .filter(r => r.toLowerCase().includes(roleSearch.toLowerCase()))
-                  .map(r => (
-                    <label key={r} style={styles.dropdownItem}>
-                      <input
-                        type="checkbox"
-                        checked={selectedRoles.includes(r)}
-                        onChange={() =>
-                          setSelectedRoles(prev =>
-                            prev.includes(r)
-                              ? prev.filter(x => x !== r)
-                              : [...prev, r]
-                          )
-                        }
-                      />
-                      {r}
-                    </label>
-                  ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* BLOCKS */}
-        <div style={styles.dropdownWrapper}>
-          <button style={styles.dropdownBtn} disabled={blocksLoading} onClick={() => setShowBlockDropdown(!showBlockDropdown)}>
-            {selectedBlocks.length === 0 ? "Blocks All" : `Blocks (${selectedBlocks.length})`}
-          </button>
-
-          {showBlockDropdown && (
-            <div style={styles.dropdownMenu}>
-              {blocksLoading ? (
-                <div style={styles.loaderContainer}>
-                  <div className="spinner"></div>
-                  <span>Loading blocks...</span>
-                </div>
-              ) : (
-                <>
-                  <div style={styles.dropdownHeader}>
-                    <button style={styles.dropdownActionBtn} onClick={() => setSelectedBlocks(Array.isArray(blocks) ? blocks.map(b => b.id) : [])}>✓ All</button>
-                    <button style={styles.dropdownActionBtn} onClick={() => setSelectedBlocks([])}>✕ None</button>
-                    <button style={styles.dropdownActionBtn} onClick={() => setShowBlockDropdown(false)}>Done</button>
-                  </div>
-                  <input
-                    placeholder="Search"
-                    value={blockSearch}
-                    onChange={(e) => setBlockSearch(e.target.value)}
-                    style={styles.input}
-                  />
-                  <div style={styles.dropdownList}>
-                    {Array.isArray(blocks) && blocks
-                      .filter(b => isValidBlock(b) && b.name.toLowerCase().includes(blockSearch.toLowerCase()))
-                      .map(b => (
-                        <label key={b.id} style={styles.dropdownItem}>
-                          <input
-                            type="checkbox"
-                            checked={Array.isArray(selectedBlocks) && selectedBlocks.includes(b.id)}
-                            onChange={() =>
-                              setSelectedBlocks(prev =>
-                                prev.includes(b.id)
-                                  ? prev.filter(id => id !== b.id)
-                                  : [...prev, b.id]
-                              )
-                            }
-                          />
-                          {safeBlockName(b)}
-                        </label>
-                      ))}
-                  </div>
-                </>
+          {/* Active filter tags */}
+          {filtersApplied && (
+            <div style={{ width: "100%", display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, paddingTop: 8, borderTop: "1px solid #f3f4f6" }}>
+              <span style={{ fontSize: 12, color: "#6b7280", alignSelf: "center" }}>Active filters:</span>
+              {filterReportingTo && (
+                <span style={S.filterChip}>
+                  Reporting: {reportingOptions.find((r) => r.id == filterReportingTo)?.login || filterReportingTo}
+                  <span onClick={() => { setFilterReportingTo(""); setPendingReportingTo(""); }} style={{ cursor: "pointer", marginLeft: 4 }}>×</span>
+                </span>
+              )}
+              {filterStatus && (
+                <span style={S.filterChip}>
+                  Status: {filterStatus === "true" ? "Active" : "Inactive"}
+                  <span onClick={() => { setFilterStatus(""); setPendingStatus(""); }} style={{ cursor: "pointer", marginLeft: 4 }}>×</span>
+                </span>
+              )}
+              {filterRoles.map((r) => (
+                <span key={r} style={S.filterChip}>
+                  Role: {r}
+                  <span onClick={() => { const nr = filterRoles.filter((x) => x !== r); setFilterRoles(nr); setPendingRoles(nr); }} style={{ cursor: "pointer", marginLeft: 4 }}>×</span>
+                </span>
+              ))}
+              {filterDistrict && (
+                <span style={S.filterChip}>
+                  District: {districts.find((d) => d.id == filterDistrict)?.name || filterDistrict}
+                  <span onClick={() => { setFilterDistrict(""); setPendingDistrict(""); setFilterBlocks([]); setPendingBlocks([]); }} style={{ cursor: "pointer", marginLeft: 4 }}>×</span>
+                </span>
+              )}
+              {filterBlocks.length > 0 && (
+                <span style={S.filterChip}>
+                  Blocks: {filterBlocks.length} selected
+                  <span onClick={() => { setFilterBlocks([]); setPendingBlocks([]); }} style={{ cursor: "pointer", marginLeft: 4 }}>×</span>
+                </span>
               )}
             </div>
           )}
         </div>
+      )}
 
-        <button style={styles.downloadBtn} onClick={downloadAll}>
-          {downloading ? "Downloading..." : "Download"}
-        </button>
-
-     
-       </div>
-)}
+      {/* BULK PANEL */}
+      <BulkPanel
+        selectedLogins={selectedUsers}
+        reportingList={reportingList}
+        onUpdate={handleBulkUpdate}
+        onClearAll={() => setSelectedUsers([])}
+        onRemoveOne={(l) => setSelectedUsers((p) => p.filter((x) => x !== l))}
+      />
 
       {/* TABLE */}
-      <table style={styles.table}>
-        <thead>
-          <tr>
-          <th style={styles.th}>
-  <input
-    type="checkbox"
-    checked={
-      filteredUsers.length > 0 &&
-      filteredUsers.every(u => selectedUsers.includes(u.login))
-    }
-    onChange={(e) => {
-      if (e.target.checked) {
-        // ✅ SELECT ALL FILTERED USERS (ALL PAGES)
-        const allLogins = filteredUsers.map(u => u.login);
-        setSelectedUsers(allLogins);
-      } else {
-        // ❌ UNSELECT ALL FILTERED USERS
-        const allLogins = filteredUsers.map(u => u.login);
-        setSelectedUsers(prev =>
-          prev.filter(login => !allLogins.includes(login))
-        );
-      }
-    }}
-  />
-</th>
-            <th style={styles.th}>Login</th>
-            <th style={styles.th}>Name</th>
-            <th style={styles.th}>Phone</th>
-            <th style={styles.th}>Status</th>
-            <th style={styles.th}>Roles</th>
-            <th style={styles.th}>Version</th>
-            <th style={styles.th}>Reporting</th>
-            <th style={styles.th}>Blocks</th>
-            <th style={styles.th}>Actions</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {currentUsers.map(u => (
-            <UserRow
-              key={u.login}
-              u={u}
-              isSelected={selectedUsers.includes(u.login)}
-              onToggleSelected={toggleUserSelection}
-              onView={handleUserClick}
-              onEdit={openEditModal}
-            />
-          ))}
-        </tbody>
-      </table>
+      <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid #e5e7eb", marginTop: 8 }}>
+        <table style={S.table}>
+          <thead>
+            <tr>
+              <th style={S.th}>
+                <input type="checkbox" checked={allPageSelected} onChange={(e) => handleToggleAll(e.target.checked)} />
+              </th>
+              {["Login", "Name", "Phone", "Status", "Roles", "Version", "Reporting", "Blocks", "Actions"].map((h) => (
+                <th key={h} style={S.th}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && users.length === 0 && (
+              <tr>
+                <td colSpan={10} style={{ textAlign: "center", padding: 40 }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                    <Spinner size={32} />
+                    <span style={{ color: "#6b7280" }}>Loading page {page + 1}…</span>
+                  </div>
+                </td>
+              </tr>
+            )}
+            {!loading && users.length === 0 && (
+              <tr>
+                <td colSpan={10} style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+                  No users found{filtersApplied ? " for current filters" : ""}
+                </td>
+              </tr>
+            )}
+            {users.map((u) => (
+              <UserRow key={u.login} u={u} isSelected={selectedUsers.includes(u.login)}
+                onToggleSelected={handleToggleOne} onView={handleView} onEdit={handleOpenEdit} />
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {/* PAGINATION */}
-     <div style={styles.paginationContainer}>
-
-  {/* LEFT SIDE */}
-  <div style={styles.paginationLeft}>
-    
-    {/* Page Size */}
-    <div>
-      Page size{" "}
-      <select
-        value={size}
-        onChange={(e) => {
-          setPage(0);
-
-setSize(
-Number(e.target.value)
-)
-        }}
-        style={styles.select}
-      >
-        {[10, 20, 50, 100].map(size => (
-          <option key={size} value={size}>{size}</option>
-        ))}
-      </select>
-    </div>
-
-    {/* Showing Count */}
-<div>
-  Showing
-{totalUsers===0
-?0
-:page*size+1}
--
-{Math.min(
-(page+1)*size,
-totalUsers
-)}
-of
-{totalUsers}
-</div>
-
-{/* Navigation buttons */}
-<div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-  <button 
-    disabled={page === 0} 
-    onClick={() => setPage(0)}
-  >
-    First
-  </button>
-  <button 
-    disabled={page === 0} 
-    onClick={() => setPage(prev => Math.max(0, prev - 1))}
-  >
-    Previous
-  </button>
-  
-  <span>Page {page + 1} of {totalPages || 1}</span>
-  
-  <button 
-    disabled={page >= totalPages - 1} 
-    onClick={() => setPage(prev => Math.min(totalPages - 1, prev + 1))}
-  >
-    Next
-  </button>
-  <button 
-    disabled={page >= totalPages - 1} 
-    onClick={() => setPage(totalPages - 1)}
-  >
-    Last
-  </button>
-</div>
-
-  {/* RIGHT SIDE */}
-  <div style={styles.paginationRight}>
-
-    {/* Go To */}
-    <div>
-      Go To{" "}
-      <input
-        type="number"
-        min="1"
-        max={totalPages}
-        value={page+1}
-        onChange={(e) => {
-          const page = Number(e.target.value);
-          if (page >= 1 && page <= totalPages) {
-            setPage(page-1)
-          }
-        }}
-        style={styles.gotoInput}
-      />
-    </div>
-
-    {/* PAGE BUTTONS */}
-    <div style={styles.pageNumbers}>
-
-      {/* Prev */}
-      <button
-        style={styles.pageBtn}
-        onClick={() =>setPage(
-p=>Math.max(p-1,0)
-)}
-      >
-        ‹
-      </button>
-
-      {/* Numbers */}
-      {[...Array(totalPages).keys()]
-        .slice(
-Math.max(0,page-2),
-page+3
-)
-        .map(i => (
-          <button
-            key={i}
-            onClick={() => setPage(i)}
-            style={{
-              ...styles.pageNumber,
-              backgroundColor: page === i  ? "#f97316" : "white",
-              color: page === i  ? "white" : "black"
-            }}
-          >
-            {i + 1}
-          </button>
-        ))}
-
-      {/* Next */}
-      <button
-        style={styles.pageBtn}
-        onClick={() => setPage(
-p=>Math.min(
-p+1,
-totalPages-1
-)
-)}
-      >
-        ›
-      </button>
-
-    </div>
-  </div>
-
-</div>
-</div>
+      <Pagination page={page} size={size} total={totalUsers}
+        onPage={setPage} onSize={(s) => { setSize(s); setPage(0); }} />
 
       {/* VIEW MODAL */}
-      {selectedUser && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalBox}>
-
-            <div style={styles.modalHeader}>
-              <h3>User Details</h3>
-              <button style={styles.closeBtnSmall} onClick={() => setSelectedUser(null)}>✖</button>
-            </div>
-
-            <div style={styles.scrollBox}>
-              <table style={styles.detailTable}>
-                <tbody>
-                  {Object.entries(selectedUser).map(([key, value]) => {
-
-                    const hidden = [
-                      "geofences", "groups", "vendors",
-                      "trakeyeType", "trakeyeTypeAttribute",
-                      "trakeyeTypeAttributeValues", "vendor"
-                    ];
-
-                    if (hidden.includes(key)) return null;
-
-                    if (key === "activated") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Status</td>
-                          <td style={{ color: value ? "green" : "red" }}>
-                            {value ? "Active" : "Inactive"}
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    if (key === "authorities") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Roles</td>
-                          <td>{value?.map((r, i) => <div key={i}>{r}</div>)}</td>
-                        </tr>
-                      );
-                    }
-
-                    if (key === "ownedBy") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Reporting To</td>
-                          <td>{value?.map(v => v.login).join(", ")}</td>
-                        </tr>
-                      );
-                    }
-
-                    if (key === "geofenceNames") {
-                      return (
-                        <tr key={key}>
-                          <td style={styles.key}>Geofences</td>
-                          <td>
-                            {value?.length > 2 ? (
-                              <details onClick={(e) => e.stopPropagation()}>
-                                <summary>{value.slice(0, 2).join(", ")}</summary>
-                                {value.map((g, i) => <div key={i}>{typeof g === "string" ? g : ""}</div>)}
-                              </details>
-                            ) : value?.join(", ")}
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return (
-                      <tr key={key}>
-                        <td style={styles.key}>{key}</td>
-                        <td>
-                          {Array.isArray(value)
-                            ? value.join(", ")
-                            : value?.toString()}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-          </div>
-        </div>
-      )}
+      <ViewModal user={selectedUser} onClose={() => setSelectedUser(null)} />
 
       {/* EDIT MODAL */}
-      {editUser && (
-        <div style={styles.modalOverlay}>
-          <div style={{ ...styles.modalBox, width: "600px" }}>
+      <EditModal
+        editUser={editUser} setEditUser={setEditUser}
+        blocks={editBlocks} rolesList={editRolesList} reportingList={reportingList}
+        selectedBlocks={editSelectedBlocks} setSelectedBlocks={setEditSelectedBlocks}
+        selectedRoles={editSelectedRoles} setSelectedRoles={setEditSelectedRoles}
+        selectedReporting={editSelectedReporting} setSelectedReporting={setEditSelectedReporting}
+        onSave={handleSave} onCancel={handleCancelEdit}
+      />
 
-            <div style={styles.modalHeader}>
-              <h3>Edit User</h3>
-              <button style={styles.closeBtnSmall} onClick={() => {
-                setEditUser(null);
-                // Restore district blocks or clear if no district selected
-                if (selectedDistrict) {
-                  axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
-                    .then(res => {
-                      const validBlocks = Array.isArray(res.data)
-                        ? res.data.filter(isValidBlock)
-                        : [];
-                      setBlocks(validBlocks);
-                      setSelectedBlocks(validBlocks.map(b => b.id));
-                    })
-                    .catch(() => {
-                      setBlocks([]);
-                      setSelectedBlocks([]);
-                    });
-                } else {
-                  setBlocks([]);
-                  setSelectedBlocks([]);
-                }
-              }}>✖</button>
-            </div>
-
-            <div style={styles.scrollBox}>
-
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>First Name</label>
-                <input
-                  placeholder="First Name"
-                  style={{ ...styles.input, width: "100%", boxSizing: "border-box" }}
-                  value={editUser?.firstName || ""}
-                  onChange={(e) => setEditUser({ ...editUser, firstName: e.target.value })}
-                />
-              </div>
-
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>Last Name</label>
-                <input
-                  placeholder="Last Name"
-                  style={{ ...styles.input, width: "100%", boxSizing: "border-box" }}
-                  value={editUser?.lastName || ""}
-                  onChange={(e) => setEditUser({ ...editUser, lastName: e.target.value })}
-                />
-              </div>
-
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>Phone</label>
-                <input
-                  placeholder="Phone"
-                  style={{ ...styles.input, width: "100%", boxSizing: "border-box" }}
-                  value={editUser?.phone || ""}
-                  onChange={(e) => setEditUser({ ...editUser, phone: e.target.value })}
-                />
-              </div>
-
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>Email</label>
-                <input
-                  placeholder="Email"
-                  style={{ ...styles.input, width: "100%", boxSizing: "border-box" }}
-                  value={editUser?.email || ""}
-                  onChange={(e) => setEditUser({ ...editUser, email: e.target.value })}
-                />
-              </div>
-
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>GPS IMEI</label>
-                <input
-                  placeholder="GPS IMEI"
-                  style={{ ...styles.input, width: "100%", boxSizing: "border-box" }}
-                  value={editUser?.gpsimei || ""}
-                  onChange={(e) => setEditUser({ ...editUser, gpsimei: e.target.value })}
-                />
-              </div>
-
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>Active Status</label>
-                <select
-                  style={{ ...styles.input, width: "100%", boxSizing: "border-box" }}
-                  value={editUser?.activated ? "active" : "inactive"}
-                  onChange={(e) => setEditUser({ ...editUser, activated: e.target.value === "active" })}
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-
-              {/* BLOCKS */}
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>
-                  Blocks ({selectedBlocks?.length || 0} selected)
-                </label>
-                <div style={{ marginBottom: "10px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                  {Array.isArray(selectedBlocks) && selectedBlocks.length > 0 ? (
-                    blocks
-                      .filter(isValidBlock)
-                      .filter(b => selectedBlocks.includes(b.id))
-                      .map(b => (
-                        <span key={`selected-block-${b.id}`} style={styles.chip}>{safeBlockName(b)}</span>
-                      ))
-                  ) : (
-                    <span style={styles.chipEmpty}>No blocks selected</span>
-                  )}
-                </div>
-                <input
-                  placeholder="Search blocks"
-                  style={{ ...styles.input, width: "100%", marginBottom: "10px" }}
-                  value={editBlockSearch}
-                  onChange={(e) => setEditBlockSearch(e.target.value)}
-                />
-                <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px", backgroundColor: "#fafafa" }}>
-                  {Array.isArray(blocks) && blocks.length > 0 ? (
-  blocks
-  .filter(isValidBlock)
-  .filter(b =>
-    b.name.toLowerCase().includes(editBlockSearch.toLowerCase())
-  )
-    .map(b => (
-      <label key={b.id} style={{
-        display: "block",
-        marginBottom: "8px",
-        cursor: "pointer",
-        padding: "4px",
-        borderRadius: "3px",
-        backgroundColor: selectedBlocks.includes(b.id)
-          ? "#e3f2fd"
-          : "transparent"
-      }}>
-        <input
-          type="checkbox"
-          checked={selectedBlocks.includes(b.id)}
-          onChange={() =>
-            setSelectedBlocks(prev =>
-              prev.includes(b.id)
-                ? prev.filter(id => id !== b.id)
-                : [...prev, b.id]
-            )
-          }
-        />
-
-        {/* ✅ HERE IS THE FIX */}
-        {safeBlockName(b)} ({b.geofenceType || "UNKNOWN"})
-
-      </label>
-    ))
-) : (
-  <p style={{ color: "#999" }}>Loading blocks...</p>
-)}
-                </div>
-              </div>
-
-              {/* ROLES */}
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>Roles</label>
-                <div style={{ marginBottom: "10px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                  {Array.isArray(selectedRolesEdit) && selectedRolesEdit.length > 0 ? (
-                    selectedRolesEdit.map((role, idx) => (
-                      <span key={`selected-role-${role}-${idx}`} style={styles.chip}>{role}</span>
-                    ))
-                  ) : (
-                    <span style={styles.chipEmpty}>No roles selected</span>
-                  )}
-                </div>
-                <input
-                  placeholder="Search roles"
-                  style={{ ...styles.input, width: "100%", marginBottom: "10px" }}
-                  value={editRoleSearch}
-                  onChange={(e) => setEditRoleSearch(e.target.value)}
-                />
-                <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px", backgroundColor: "#fafafa" }}>
-                  {Array.isArray(rolesList) && rolesList.length > 0 ? (
-                    rolesList
-                      .filter(r => {
-                        const roleName = (r.configKey || r.configValue || r.name || "").toString();
-                        return roleName.toLowerCase().includes(editRoleSearch.toLowerCase());
-                      })
-                      .map((r, idx) => {
-                        const roleId = r.id || r.configKey || idx;
-                        const roleName = r.configKey || r.configValue || r.name || "";
-                        const displayName = roleName || "(unnamed)";
-
-                        return (
-                          <label key={roleId} style={{ display: "block", marginBottom: "8px", cursor: "pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={Array.isArray(selectedRolesEdit) && selectedRolesEdit.includes(roleName)}
-                              onChange={() => {
-                                setSelectedRolesEdit(prev => {
-                                  const safePrev = Array.isArray(prev) ? prev : [];
-                                  return safePrev.includes(roleName)
-                                    ? safePrev.filter(x => x !== roleName)
-                                    : [...safePrev, roleName];
-                                });
-                              }}
-                            />
-                          {displayName}
-                        </label>
-                      );
-                    })
-                  ) : (
-                    <p style={{ color: "#999" }}>Loading roles...</p>
-                  )}
-                </div>
-              </div>
-
-              {/* REPORTING */}
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ fontWeight: "bold", display: "block", marginBottom: "5px" }}>Reporting To</label>
-                <select
-                  style={{ ...styles.input, width: "100%", boxSizing: "border-box" }}
-                  value={selectedReportingEdit?.id || ""}
-                  onChange={(e) => {
-                    const selected = Array.isArray(reportingListEdit)
-                      ? reportingListEdit.find(r => r.id == e.target.value)
-                      : null;
-                    setSelectedReportingEdit(selected);
-                  }}
-                >
-                  <option value="">Select Reporting Manager</option>
-                  {Array.isArray(reportingListEdit) && reportingListEdit.map(r => (
-                    <option key={r.id} value={r.id}>
-                      {r.login} ({r.firstName} {r.lastName})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* DEBUG INFO */}
-              <div style={{ marginTop: "20px", padding: "10px", backgroundColor: "#f0f0f0", borderRadius: "4px", fontSize: "12px", color: "#666" }}>
-                <p><strong>Debug Info:</strong></p>
-                <p>✅ User: {editUser?.login}</p>
-                <p>✅ Roles loaded: {rolesList?.length || 0} | Selected: {selectedRolesEdit?.length || 0}</p>
-                <p>✅ Reporting: {reportingListEdit?.length || 0} | Selected: {selectedReportingEdit?.login || "None"}</p>
-                <p>✅ Blocks loaded: {blocks?.length || 0} | Selected: {selectedBlocks?.length || 0}</p>
-                <p><strong>Payload will send:</strong></p>
-                <p>• geofences: {JSON.stringify(selectedBlocks)}</p>
-                <p>• authorities: {JSON.stringify(selectedRolesEdit)}</p>
-              </div>
-
-            </div>
-
-            <div style={{ marginTop: "10px" }}>
-              <button style={styles.editBtn} onClick={handleUpdate}>Save</button>
-              <button onClick={() => {
-                setEditUser(null);
-                // Restore district blocks or clear if no district selected
-                if (selectedDistrict) {
-                  axios.get(`https://user-extract.onrender.com/api/blocks/${selectedDistrict}`)
-                    .then(res => {
-                      const validBlocks = Array.isArray(res.data)
-                        ? res.data.filter(isValidBlock)
-                        : [];
-                      setBlocks(validBlocks);
-                      setSelectedBlocks(validBlocks.map(b => b.id));
-                    })
-                    .catch(() => {
-                      setBlocks([]);
-                      setSelectedBlocks([]);
-                    });
-                } else {
-                  setBlocks([]);
-                  setSelectedBlocks([]);
-                }
-              }}>Cancel</button>
-            </div>
-
-          </div>
-        </div>
-      )}
+      {/* HIERARCHY OVERLAY */}
       {showHierarchy && (
-  <div style={{
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100vw",
-    height: "100vh",
-    background: "#f5f7fa",
-    zIndex: 9999,
-    overflow: "hidden"
-  }}>
-<div style={{
-  padding: "10px 20px",
-  borderBottom: "1px solid #ddd",
-  background: "white",
-  display: "flex",
-  alignItems: "center",
-  gap: "12px"
-}}>
-
-  <input
-    type="text"
-    placeholder="Search by login, first name, or last name..."
-    value={hierarchySearch}
-
-    onChange={(e) => {
-      setHierarchySearch(e.target.value);
-      // Clear highlighting if search is cleared
-      if (!e.target.value.trim()) {
-        setHighlightedUser("");
-        // Reload full hierarchy when search is cleared
-        const reloadFullHierarchy = async () => {
-          try {
-            const res = await axios.get("https://user-extract.onrender.com/api/hierarchy", {
-              signal: hierarchyAbortController?.signal
-            });
-            let hierarchyList = Array.isArray(res.data) ? res.data : [];
-            hierarchyList = await enrichHierarchyWithUserDetails(hierarchyList);
-            setHierarchyData(hierarchyList);
-            setExpanded({});
-            setHierarchyKey(prev => prev + 1);
-          } catch (err) {
-            if (err.name !== 'AbortError') {
-              console.error("Error reloading hierarchy:", err);
-            }
-          }
-        };
-        reloadFullHierarchy();
-      }
-    }}
-
-    onKeyDown={async (e) => {
-
-      if (e.key !== "Enter") return;
-
-      await searchHierarchyUser(hierarchySearch);
-
-    }}
-
-    style={{
-      width: "300px",
-      padding: "10px 14px",
-      borderRadius: "8px",
-      border: "1px solid #ccc",
-      outline: "none",
-      fontSize: "14px"
-    }}
-  />
-
-  {/* SEARCH LOADER */}
-  {searchingHierarchy && (
-
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "10px",
-      color: "#2563eb",
-      fontWeight: "500"
-    }}>
-
-      <div style={{
-        width: "18px",
-        height: "18px",
-        border: "3px solid #dbeafe",
-        borderTop: "3px solid #2563eb",
-        borderRadius: "50%",
-        animation: "spin 1s linear infinite"
-      }}></div>
-
-      Searching hierarchy...
-
-    </div>
-
-  )}
-
-</div>
-    {/* HEADER */}
-    <div style={{
-      height: "60px",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: "0 20px",
-      background: "white",
-      boxShadow: "0 2px 6px rgba(0,0,0,0.1)"
-    }}>
-      <h3>User Hierarchy</h3>
-
-      <div style={{ display: "flex", gap: "10px" }}>
-        <button onClick={() => setZoom(z => Math.min(z + 0.1, 2))}>➕</button>
-        <button onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))}>➖</button>
-        <button onClick={() => {
-          // Abort all pending API requests
-          if (hierarchyAbortController) {
-            hierarchyAbortController.abort();
-            setHierarchyAbortController(null);
-          }
-          
-          setShowHierarchy(false);
-          setHighlightedUser("");
-          setHierarchySearch("");
-          setExpanded({});
-          setSearchingHierarchy(false);
-          setHierarchyData([]);
-        }}>❌ Close</button>
-      </div>
-    </div>
-
-    {/* CANVAS AREA */}
-    <div
-  onWheel={handleWheel}
-  onMouseDown={handleMouseDown}
-  onMouseMove={handleMouseMove}
-  onMouseUp={handleMouseUp}
-  onMouseLeave={handleMouseUp}
-
-  style={{
-    width: "100%",
-    height: "calc(100% - 60px)",
-    overflow: "hidden",
-    cursor: isPanning ? "grabbing" : "grab",
-    background: "#f5f7fa",
-    position: "relative"
-  }}
->
-
-  <div
-    style={{
-      transform: `
-        translate(${position.x}px, ${position.y}px)
-        scale(${zoom})
-      `,
-      transformOrigin: "top left",
-      transition: isPanning
-        ? "none"
-        : "transform 0.1s ease",
-      minWidth: "max-content",
-      minHeight: "max-content",
-      padding: "50px"
-    }}
-  >
-
-  {hierarchyData?.length > 0 && (
-
-<DndProvider backend={HTML5Backend}>
-
-<div
-  style={{
-    width:"100%",
-    height:"80vh"
-  }}
->
-
-<Tree
-  data={convertToD3(hierarchyData)}
-  orientation="vertical"
-  pathFunc="diagonal"
-
-  translate={{
-    x:650,
-    y:100
-  }}
-
-  nodeSize={{
-    x:250,
-    y:140
-  }}
-
-  separation={{
-    siblings:1.2,
-    nonSiblings:1.5
-  }}
-
-  renderCustomNodeElement={({nodeDatum,toggleNode})=>(
-
-<g>
-  <HierarchyD3Node
-     nodeDatum={nodeDatum}
-     toggleNode={toggleNode}
-     hierarchyData={hierarchyData}
-     loadChildren={loadChildren}
-     setHierarchyKey={setHierarchyKey}
-     reloadAllData={reloadAllData}
-     setLoading={setLoading}
-  />
-</g>
-)}
-/>
-
-</div>
-
-</DndProvider>
-
-)}
-
-</div>
-</div>
-</div>
-)}
-{hierarchyEditUser && (
- <div style={cleanStyles.modalOverlay}>
-  <div style={cleanStyles.modalBox}>
-
-    {/* HEADER */}
-    <div style={cleanStyles.header}>
-      <h3>Edit Reporting</h3>
-    </div>
-
-    {/* USER */}
-    <div style={cleanStyles.userText}>
-      <span>User:</span> {hierarchyEditUser.login}
-    </div>
-
-    {/* DROPDOWN */}
-    <div style={cleanStyles.dropdownContainer}>
-
-      {/* SELECT BOX */}
-      <div
-        style={cleanStyles.selectBox}
-        onClick={() => setShowHierarchyDropdown(prev => !prev)}
-      >
-        {hierarchyReporting
-          ? reportingListEdit.find(r => r.id == hierarchyReporting)?.login
-          : "Select Reporting User"}
-      </div>
-
-      {/* DROPDOWN */}
-      {showHierarchyDropdown && (
-        <div style={cleanStyles.dropdown}>
-
-          {/* SEARCH */}
-          <input
-            placeholder="Search reporting user..."
-            value={hierarchyReportSearch}
-            onChange={(e) => setHierarchyReportSearch(e.target.value)}
-            style={cleanStyles.searchInput}
-          />
-
-          {/* LIST */}
-          <div style={cleanStyles.list}>
-            {reportingListEdit
-              .filter(r =>
-                r.login?.toLowerCase().includes(hierarchyReportSearch.toLowerCase())
-              )
-              .map(r => (
-                <div
-                  key={r.id}
-                  style={{
-   ...cleanStyles.listItem,
-   background:
-      hierarchyReporting == r.id
-      ? "#e0f2fe"
-      : "white"
-}}
-                  onClick={() => {
-                    setHierarchyReporting(r.id);
-                    setShowHierarchyDropdown(false);
-                    setHierarchyReportSearch("");
-                  }}
-                >
-                  <b>{r.login}</b>
-                  <div style={{ fontSize: "12px", color: "#666" }}>
-                    {r.firstName} {r.lastName}
-                  </div>
-                </div>
-              ))}
+        <div style={{ position: "fixed", inset: 0, background: "#f5f7fa", zIndex: 9999, display: "flex", flexDirection: "column" }}>
+          <div style={{ background: "white", borderBottom: "1px solid #e5e7eb", padding: "0 20px", height: 56, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+            <h3 style={{ margin: 0, fontSize: 16 }}>User Hierarchy</h3>
+            <div style={{ position: "relative", marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ ...S.searchBox, maxWidth: 280, border: "1px solid #d1d5db" }}>
+                <span style={{ color: "#9ca3af", fontSize: 13 }}>🔍</span>
+                <input placeholder="Search by login / name…" value={hierarchySearch}
+                  onChange={(e) => setHierarchySearch(e.target.value)}
+                  style={{ ...S.searchInput, width: 220 }} />
+                {hierarchySearch && <button onClick={() => setHierarchySearch("")} style={S.clearBtn}>✕</button>}
+              </div>
+              {searchingHierarchy && <Spinner size={16} inline />}
+              {highlightedUser && !searchingHierarchy && (
+                <span style={{ fontSize: 12, color: "#059669", fontWeight: 600 }}>Found: {highlightedUser}</span>
+              )}
+              {!searchingHierarchy && hierarchySearch && !highlightedUser && (
+                <span style={{ fontSize: 12, color: "#dc2626" }}>Not found</span>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button style={S.miniBtn} onClick={() => setZoom((z) => Math.min(z + 0.15, 3))}>＋</button>
+              <button style={S.miniBtn} onClick={() => setZoom((z) => Math.max(z - 0.15, 0.3))}>−</button>
+              <button style={S.miniBtn} onClick={() => { setZoom(1); setPosition({ x: 0, y: 0 }); }}>Reset</button>
+              <button style={{ ...S.primaryBtn, background: "#dc2626" }} onClick={closeHierarchy}>✕ Close</button>
+            </div>
           </div>
 
+          <div
+            onWheel={handleWheel} onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
+            style={{ flex: 1, overflow: "hidden", cursor: isPanning ? "grabbing" : "grab", position: "relative", background: "#f8fafc" }}>
+            {hierarchyLoading && (
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
+                <Spinner size={36} />
+                <span style={{ color: "#6b7280" }}>Loading hierarchy…</span>
+              </div>
+            )}
+            {!hierarchyLoading && hierarchyData.length === 0 && (
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af" }}>
+                No hierarchy data available
+              </div>
+            )}
+            {!hierarchyLoading && hierarchyData.length > 0 && (
+              <div style={{
+                transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+                transformOrigin: "top left",
+                transition: isPanning ? "none" : "transform 0.1s",
+                width: "100%", height: "100%",
+              }}>
+                <DndProvider backend={HTML5Backend}>
+                  <div style={{ width: "100%", height: "calc(100vh - 56px)" }}>
+                    <Tree
+                      key={hierarchyKey}
+                      data={convertToD3(hierarchyData)}
+                      orientation="vertical"
+                      pathFunc="diagonal"
+                      translate={{ x: window.innerWidth / 2, y: 80 }}
+                      nodeSize={{ x: 260, y: 160 }}
+                      separation={{ siblings: 1.2, nonSiblings: 1.6 }}
+                      zoom={1}
+                      scaleExtent={{ min: 0.1, max: 3 }}
+                      renderCustomNodeElement={({ nodeDatum, toggleNode }) => (
+                        <g>
+                          <HierarchyD3Node
+                            nodeDatum={nodeDatum} toggleNode={toggleNode}
+                            hierarchyData={hierarchyData} loadChildren={loadChildren}
+                            reloadAllData={reloadAllData} setLoading={setLoading}
+                            openHierarchyEdit={openHierarchyEdit}
+                            highlightedUser={highlightedUser}
+                            reportingListEdit={reportingList}
+                            setReportingListEdit={setReportingList}
+                          />
+                        </g>
+                      )}
+                    />
+                  </div>
+                </DndProvider>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* HIERARCHY EDIT MODAL */}
+      <HierarchyEditModal
+        user={hierarchyEditUser} reportingList={reportingList}
+        onSave={handleHierarchyEditSave} onCancel={() => setHierarchyEditUser(null)}
+      />
+
+      {/* LOADING OVERLAY for edit/save operations */}
+      {loading && editUser === null && !showHierarchy && users.length > 0 && (
+        <div style={{ position: "fixed", bottom: 24, right: 24, background: "white", borderRadius: 10, padding: "10px 16px", boxShadow: "0 4px 16px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 10, zIndex: 99998, border: "1px solid #e5e7eb" }}>
+          <Spinner size={18} inline />
+          <span style={{ fontSize: 13, color: "#374151" }}>Updating…</span>
         </div>
       )}
     </div>
-
-    {/* BUTTONS */}
-    <div style={cleanStyles.actions}>
-      <button style={cleanStyles.saveBtn} onClick={updateHierarchyReporting}>
-        Save
-      </button>
-
-      <button style={cleanStyles.cancelBtn} onClick={() => setHierarchyEditUser(null)}>
-        Cancel
-      </button>
-    </div>
-
-  </div>
-
-  </div>
-)}
-{loading && (
-  <div style={styles.loaderOverlay}>
-    <div style={styles.spinner}></div>
-    <p style={{ color: "white", marginTop: "10px" }}>
-      Loading...
-    </p>
-  </div>
-)}
-      
-    </div>
-    
   );
 }
-styles = {
-  page: { padding: "20px" },
-  filters: {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: "10px",
-  alignItems: "center",
-  marginTop: "10px"
-},
-loaderOverlay: {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  width: "100%",
-  height: "100%",
-  background: "rgba(0,0,0,0.5)",
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "center",
-  alignItems: "center",
-  zIndex: 99999
-},
 
-spinner: {
-  width: "50px",
-  height: "50px",
-  border: "5px solid #f3f3f3",
-  borderTop: "5px solid #2563eb",
-  borderRadius: "50%",
-  animation: "spin 1s linear infinite"
-},filterControl: {
-  height: "38px",
-  padding: "0 10px",
-  border: "1px solid #ccc",
-  borderRadius: "6px",
-  width: "100%",
-  background: "white",
-  fontSize: "14px"
-},
-  input: { padding: "8px", width: "180px", marginBottom: "5px", border: "1px solid #ccc", borderRadius: "5px" },
-  dropdownWrapper: { position: "relative", width: "200px" },
-  dropdownBtn: { width: "100%", padding: "8px", border: "1px solid #ccc", cursor: "pointer", textAlign: "left" },
-  dropdownMenu: {
-    position: "absolute", top: "100%", left: 0, width: "100%",
-    background: "white", border: "1px solid #ccc", padding: "10px",
-    zIndex: 1000, boxShadow: "0 4px 8px rgba(0,0,0,0.1)", borderRadius: "6px"
-  },
-  dropdownList: { maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "6px", padding: "5px" },
-  dropdownItem: { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", padding: "4px 2px", cursor: "pointer" },
-  dropdownHeader: { display: "flex", marginBottom: "8px", gap: "6px" },
-  dropdownActionBtn: { padding: "4px 8px", border: "1px solid #ccc", borderRadius: "4px", cursor: "pointer", fontSize: "12px", background: "#f5f5f5" },
-  closeDropdownBtn: { marginTop: "5px" },
-  downloadBtn: { background: "#2563eb", color: "white", padding: "8px" },
-  chip: { display: "inline-flex", alignItems: "center", padding: "4px 8px", borderRadius: "999px", background: "#e0f2fe", color: "#0369a1", fontSize: "12px", border: "1px solid #bae6fd" },
-  chipEmpty: { display: "inline-flex", alignItems: "center", padding: "4px 8px", borderRadius: "999px", background: "#f8fafc", color: "#6b7280", fontSize: "12px", border: "1px solid #e5e7eb" },
-  loaderContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", margin: "15px 0" },
-  spinner: { width: "18px", height: "18px", border: "3px solid #ccc", borderTop: "3px solid blue", borderRadius: "50%" },
-  modalOverlay: {
-    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-    background: "rgba(0,0,0,0.6)", display: "flex",
-    justifyContent: "center", alignItems: "center", zIndex: 9999
-  },
-  paginationContainer: {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginTop: "15px",
-  padding: "10px",
-  borderTop: "1px solid #ddd",
-  fontSize: "14px"
-},
-
-paginationLeft: {
-  display: "flex",
-  gap: "20px",
-  alignItems: "center"
-},topBar: {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "15px"
-},
-
-searchWrapper: {
-  display: "flex",
-  alignItems: "center",
-  border: "1px solid #ccc",
-  borderRadius: "20px",
-  padding: "5px 10px",
-  background: "white",
-  width: "260px"
-},
-loaderContainer: {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "30px",
-  gap: "10px"
-},
-
-spinner: {
-  width: "30px",
-  height: "30px",
-  border: "4px solid #ccc",
-  borderTop: "4px solid #2563eb",
-  borderRadius: "50%",
-  animation: "spin 1s linear infinite"
-},
-
-searchIcon: {
-  marginRight: "6px",
-  fontSize: "14px",
-  color: "#888"
-},
-
-searchInput: {
-  border: "none",
-  outline: "none",
-  width: "100%",
-  fontSize: "14px"
-},
-
-topActions: {
-  display: "flex",
-  gap: "10px"
-},
-
-primaryBtn: {
-  background: "#f97316",   // orange (like polycab)
-  color: "white",
-  border: "none",
-  padding: "8px 14px",
-  borderRadius: "5px",
-  cursor: "pointer",
-  fontWeight: "500"
-},
-
-secondaryBtn: {
-  background: "#f97316",
-  color: "white",
-  border: "none",
-  padding: "8px 14px",
-  borderRadius: "5px",
-  cursor: "pointer",
-  fontWeight: "500"
-},
-
-paginationRight: {
-  display: "flex",
-  gap: "20px",
-  alignItems: "center"
-},
-
-select: {
-  padding: "4px",
-  border: "1px solid #ccc",
-  borderRadius: "4px"
-},
-
-gotoInput: {
-  width: "50px",
-  padding: "4px",
-  border: "1px solid #ccc",
-  borderRadius: "4px"
-},
-
-pageNumbers: {
-  display: "flex",
-  gap: "5px",
-  alignItems: "center"
-},
-
-pageBtn: {
-  padding: "5px 8px",
-  border: "1px solid #ccc",
-  background: "white",
-  cursor: "pointer"
-},
-
-pageNumber: {
-  padding: "5px 10px",
-  border: "1px solid #ccc",
-  cursor: "pointer"
-},
-  modalBox: {
-    background: "white", width: "600px", maxHeight: "80vh",
-    borderRadius: "10px", padding: "15px", display: "flex",
-    flexDirection: "column", boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
-  },
-  filterPanel: {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: "12px",
-  padding: "15px",
-  background: "#ffffff",
-  border: "1px solid #e5e7eb",
-  borderRadius: "8px",
-  boxShadow: "0 2px 6px rgba(0,0,0,0.05)"
-},filterItem: {
-  display: "flex",
-  flexDirection: "column",
-  gap: "4px"
-},
-
-filterLabel: {
-  fontSize: "12px",
-  color: "#6b7280",
-  fontWeight: "500"
-},
-
-filterControl: {
-  height: "36px",
-  padding: "6px 10px",
-  border: "1px solid #d1d5db",
-  borderRadius: "6px",
-  fontSize: "14px",
-  background: "#fff",
-  width: "100%"
-},
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #eee", marginBottom: "10px" },
-  scrollBox: { overflowY: "auto", maxHeight: "60vh" },
-  detailTable: { width: "100%", borderCollapse: "collapse" },
-  key: { fontWeight: "bold", width: "40%", padding: "8px", borderBottom: "1px solid #eee" },
-  closeBtnSmall: { background: "red", color: "white", border: "none", padding: "4px 8px", fontSize: "12px", borderRadius: "5px", cursor: "pointer" },
-  table: { width: "100%", borderCollapse: "collapse", marginTop: "10px", fontSize: "14px" },
-  th: { background: "#f3f4f6", padding: "12px", border: "1px solid #ddd", textAlign: "left", fontWeight: "600" },
-  td: { padding: "10px", border: "1px solid #ddd", verticalAlign: "top" },
-  tr: { cursor: "pointer", transition: "background 0.2s ease" },
-  pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", marginTop: "20px" },
-  pageBtn: { padding: "6px 12px", border: "1px solid #ccc", borderRadius: "5px", cursor: "pointer" },
-  viewBtn: { padding: "5px", marginRight: "5px", background: "green", color: "white", border: "none", cursor: "pointer" },
-  editBtn: { padding: "5px", background: "blue", color: "white", border: "none", cursor: "pointer" },
-  geoBox: { maxHeight: "60px", overflowY: "auto", paddingRight: "5px" },hierarchyOverlay: {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: "rgba(0,0,0,0.5)",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  zIndex: 9999
-},
-
-hierarchyBox: {
-  background: "white",
-  width: "80%",
-  maxHeight: "80vh",
-  borderRadius: "10px",
-  padding: "15px",
-  overflow: "hidden"
-},
-
-hierarchyHeader: {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  borderBottom: "1px solid #eee",
-  marginBottom: "10px"
-},
-
-nodeCard: {
-  padding: "6px 10px",
-  border: "1px solid #ccc",
-  borderRadius: "6px",
-  background: "#f9fafb",
-  display: "inline-block"
-},
-hierarchyOverlay: {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: "rgba(0,0,0,0.5)",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  zIndex: 9999
-},
-
-hierarchyBox: {
-  background: "white",
-  width: "80%",
-  maxHeight: "80vh",
-  borderRadius: "10px",
-  padding: "15px",
-  overflow: "hidden"
-},
-
-hierarchyHeader: {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  borderBottom: "1px solid #eee",
-  marginBottom: "10px"
-},
-
-nodeCard: {
-  padding: "6px 10px",
-  border: "1px solid #ccc",
-  borderRadius: "6px",
-  background: "#f9fafb",
-  display: "inline-block"
-},
-
-loaderContainer: {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "30px",
-  gap: "10px"
-},
-
-spinner: {
-  width: "30px",
-  height: "30px",
-  border: "4px solid #ccc",
-  borderTop: "4px solid #2563eb",
-  borderRadius: "50%",
-  animation: "spin 1s linear infinite"
-}
+// ─── styles ───────────────────────────────────────────────────
+const S = {
+  page: { padding: 20, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: "#111827", minHeight: "100vh" },
+  topBar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 12, flexWrap: "wrap" },
+  searchBox: { display: "flex", alignItems: "center", gap: 8, border: "1px solid #d1d5db", borderRadius: 8, padding: "6px 10px", background: "white", flex: 1, maxWidth: 400 },
+  searchInput: { border: "none", outline: "none", flex: 1, fontSize: 14, background: "transparent" },
+  clearBtn: { border: "none", background: "none", cursor: "pointer", color: "#9ca3af", fontSize: 12 },
+  primaryBtn: { background: "#f97316", color: "white", border: "none", padding: "7px 14px", borderRadius: 6, cursor: "pointer", fontWeight: 500, fontSize: 13, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 4 },
+  filterPanel: { display: "flex", flexWrap: "wrap", gap: 10, padding: "14px 16px", background: "white", border: "1px solid #e5e7eb", borderRadius: 8, marginBottom: 12 },
+  filterSelect: { height: 34, padding: "0 8px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, background: "white", cursor: "pointer" },
+  filterChip: { display: "inline-flex", alignItems: "center", padding: "3px 8px", borderRadius: 4, background: "#fff7ed", color: "#c2410c", fontSize: 12, border: "1px solid #fed7aa" },
+  bulkPanel: { border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 8, padding: "12px 14px", marginBottom: 12 },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  th: { background: "#f9fafb", padding: "10px 12px", borderBottom: "2px solid #e5e7eb", textAlign: "left", fontWeight: 600, color: "#374151", whiteSpace: "nowrap" },
+  td: { padding: "9px 12px", borderBottom: "1px solid #f3f4f6", verticalAlign: "top", fontSize: 13 },
+  viewBtn: { padding: "4px 7px", marginRight: 4, background: "#059669", color: "white", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 12 },
+  editBtn: { padding: "4px 7px", background: "#2563eb", color: "white", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 12 },
+  paginationBar: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 4px", borderTop: "1px solid #e5e7eb", marginTop: 0, flexWrap: "wrap", gap: 10 },
+  pageBtn: { padding: "5px 10px", border: "1px solid #d1d5db", borderRadius: 4, background: "white", cursor: "pointer", fontSize: 13, minWidth: 32 },
+  smallSelect: { padding: "4px 6px", border: "1px solid #d1d5db", borderRadius: 4, fontSize: 13 },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999 },
+  modal: { background: "white", borderRadius: 12, padding: "18px 20px", maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 40px rgba(0,0,0,0.25)" },
+  modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #e5e7eb", paddingBottom: 12, marginBottom: 14 },
+  closeBtn: { background: "#dc2626", color: "white", border: "none", padding: "3px 8px", borderRadius: 4, cursor: "pointer", fontSize: 12, fontWeight: 600 },
+  scrollBox: { overflowY: "auto", flex: 1 },
+  detailKey: { fontWeight: 600, padding: "7px 12px 7px 0", color: "#374151", width: "38%", borderBottom: "1px solid #f3f4f6", fontSize: 13 },
+  formRow: { display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 },
+  formLabel: { width: 120, fontWeight: 600, fontSize: 13, color: "#374151", paddingTop: 6, flexShrink: 0 },
+  formInput: { flex: 1, padding: "7px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, outline: "none", width: "100%" },
+  chip: { display: "inline-flex", alignItems: "center", padding: "3px 8px", borderRadius: 999, background: "#dbeafe", color: "#1d4ed8", fontSize: 12 },
+  saveBtnLarge: { background: "#2563eb", color: "white", border: "none", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 13 },
+  cancelBtnLarge: { background: "#f3f4f6", color: "#374151", border: "none", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontWeight: 500, fontSize: 13 },
+  dropBtn: { display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", border: "1px solid #d1d5db", borderRadius: 6, background: "white", cursor: "pointer", fontSize: 13, minWidth: 160 },
+  dropMenu: { position: "absolute", top: "calc(100% + 4px)", left: 0, background: "white", border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 8px 20px rgba(0,0,0,0.12)", zIndex: 1000, minWidth: 200 },
+  dropSearch: { width: "100%", padding: "8px 10px", border: "none", borderBottom: "1px solid #f3f4f6", outline: "none", fontSize: 13 },
+  dropList: { maxHeight: 200, overflowY: "auto" },
+  dropItem: { padding: "9px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f9fafb" },
+  miniBtn: { padding: "5px 10px", border: "1px solid #d1d5db", borderRadius: 5, background: "white", cursor: "pointer", fontSize: 12 },
 };
-
-
-export default UsersTable;
