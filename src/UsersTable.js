@@ -105,8 +105,13 @@ const UserRow = React.memo(({ u, isSelected, onToggleSelected, onView, onEdit })
       {u.activated ? "Active" : "Inactive"}
     </td>
     <td style={S.td}>{u.roles?.join(", ")}</td>
-    <td style={S.td}>{u.version}</td>
-    <td style={S.td}>{u.reportingTo}</td>
+    <td style={S.td}>
+ {(u.version &&
+   u.version !== "null")
+   ? u.version
+   : "—"}
+</td>
+    <td style={S.td}>{u.reportingTo || "—"}</td>
     <td style={S.td}>
       <div style={{ maxHeight: 55, overflowY: "auto" }}>
         {u.geofenceNames?.map((g, i) => typeof g === "string" ? <div key={i}>{g}</div> : null)}
@@ -661,7 +666,10 @@ console.log("API RESPONSE:",response);
 
 setUsers(
     Array.isArray(response.content)
-        ? response.content
+        ? response.content.map(u => {
+            console.log("User data:", u);
+            return u;
+          })
         : []
 )
 
@@ -980,7 +988,10 @@ Reporting:
 u.reportingTo,
 
 Version:
-u.version
+(u.version &&
+ u.version !== "null")
+? u.version
+: ""
 
 }))
 
@@ -1045,6 +1056,72 @@ setDownloading(false)
     } catch { alert("Update failed ❌"); }
   }, [hierarchyEditUser, reloadAllData]);
 
+  // ── helper: find path in hierarchy and expand ──
+  const expandPathToUser = useCallback(async(userLogin)=>{
+
+try{
+
+// clear previous loaded nodes
+loadedHierarchyNodes.current.clear();
+
+// reload root only
+const rootRes=await api.get("/hierarchy/root");
+
+const roots=
+Array.isArray(rootRes.data)
+? rootRes.data
+:[rootRes.data];
+
+setHierarchyData(roots);
+
+// queue for BFS
+let queue=[...roots];
+
+while(queue.length){
+
+const current=queue.shift();
+
+if(current.login===userLogin){
+
+setHighlightedUser(userLogin);
+
+setHierarchyKey(k=>k+1);
+
+return;
+}
+
+if(current.hasChildren){
+
+const res=await api.get(
+`/hierarchy/children/${current.login}`
+);
+
+const children=
+Array.isArray(res.data)
+?res.data
+:[];
+
+current.children=children;
+
+loadedHierarchyNodes.current.add(
+current.login
+);
+
+queue.push(...children);
+}
+
+}
+
+setHighlightedUser("");
+
+}
+catch(e){
+
+console.log(e);
+
+}
+},[]);
+
   // ── hierarchy search ──
   const debouncedHierarchySearch = useDebounce(hierarchySearch, 500);
   useEffect(()=>{
@@ -1082,9 +1159,9 @@ res.data?.content || []
 
 if(users.length){
 
-setHighlightedUser(
-users[0].login
-)
+const foundLogin = users[0].login
+setHighlightedUser(foundLogin)
+await expandPathToUser(foundLogin)
 
 }else{
 
@@ -1110,7 +1187,8 @@ searchHierarchy()
 
 },[
 debouncedHierarchySearch,
-showHierarchy
+showHierarchy,
+expandPathToUser
 ])
 
   const openHierarchy = useCallback(async () => {
